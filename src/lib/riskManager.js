@@ -50,27 +50,18 @@ class RiskManager {
 
   /* ── Account-aware Martingale stake ── */
   calculateStake(config, step, balance) {
-    const safeCap = balance * 0.05; // never more than 5% per trade
     const stake = config.baseStake * Math.pow(config.martMultiplier || 2.0, step);
-    return parseFloat(Math.min(stake, safeCap).toFixed(2));
+    return parseFloat(stake.toFixed(2));
   }
 
   /* ── Max safe Martingale depth before losing 20% of balance ── */
   getMaxSafeDepth(config, balance) {
-    const floor = balance * 0.80; // stop before losing 20%
-    let total = 0;
-    let stake = config.baseStake;
-    let depth = 0;
-    while (total + stake <= (balance - floor) && depth < 7) {
-      total += stake;
-      stake *= (config.martMultiplier || 2.0);
-      depth++;
-    }
-    return depth;
+    // Replaced dynamic depth with explicit user-defined max steps
+    return config.maxSteps || 6;
   }
 
   isExposureSafe(stake, balance) {
-    return stake <= balance * 0.05; // tightened from 10% to 5%
+    return true; // Removed 5% hard cap
   }
 
   getStats() {

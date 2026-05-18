@@ -14,13 +14,13 @@ function loadConfig() {
 const defaults = {
   strategy: 'BOTH5',          // 'BOTH5' (Over/Under) or 'BOTH' (Even/Odd)
   baseStake: 0.35,
-  maxSteps: 7,
+  maxSteps: 6,
   martMultiplier: 2.0,
   recoveryEnabled: false,      // Martingale OFF by default — user turns on manually
   switchAfterLosses: 3,
   stopLoss: 5,
   takeProfit: 3,
-  cooldownMs: 3000,            // 3 seconds between trades
+  cooldownMs: 1000,            // 1 second between trades
   minConfidence: 65,           // don't trade below this signal strength
 };
 

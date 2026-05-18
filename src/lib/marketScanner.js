@@ -57,8 +57,14 @@ class MarketScanner {
     return MARKETS
       .map(sym => ({ symbol: sym, label: MARKET_LABELS[sym], ...this.scores[sym] }))
       .sort((a, b) => {
-        if (strategy === 'BOTH5') return b.overUnderScore - a.overUnderScore;
-        return b.evenOddScore - a.evenOddScore;
+        if (strategy === 'BOTH5') {
+          // Over/Under: highest overPct first (most digits >5)
+          return (parseFloat(b.overPct) || 0) - (parseFloat(a.overPct) || 0);
+        }
+        // Even/Odd: most balanced split first (smallest |even - odd| difference)
+        const diffA = Math.abs((parseFloat(a.evenPct) || 50) - (parseFloat(a.oddPct) || 50));
+        const diffB = Math.abs((parseFloat(b.evenPct) || 50) - (parseFloat(b.oddPct) || 50));
+        return diffA - diffB;
       });
   }
 

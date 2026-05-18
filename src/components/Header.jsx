@@ -45,6 +45,16 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownRef]);
 
+  // Auto-connect to Demo account on first load
+  useEffect(() => {
+    if (status === 'disconnected' && !botRunning) {
+      const demoAcc = accounts.find(a => a.loginid?.startsWith('VRTC') || (!a.loginid && a.token === 'zC1SkSXgajB5ymD'));
+      if (demoAcc) {
+        handleConnect(demoAcc);
+      }
+    }
+  }, []); // Run once on mount
+
   // Derive Real/Demo accounts heuristics
   // CR loginid = Real, VRTC = Demo
   const demoAccounts = accounts.filter(a => a.loginid?.startsWith('VRTC') || (!a.loginid && a.token === 'zC1SkSXgajB5ymD'));
