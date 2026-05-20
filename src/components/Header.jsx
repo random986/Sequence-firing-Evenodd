@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { ChevronDown, Printer, LayoutDashboard, Radar, History, Settings, Plus } from 'lucide-react';
+import { ChevronDown, Printer, LayoutDashboard, Radar, History, Settings, Plus, LogIn } from 'lucide-react';
 import useAccountStore from '../store/useAccountStore';
 import useConnectionStore from '../store/useConnectionStore';
 import useTradeStore from '../store/useTradeStore';
@@ -34,6 +34,13 @@ export default function Header() {
   const accountInfo = useConnectionStore(s => s.account);
   
   const botRunning = useTradeStore(s => s.botRunning);
+  
+  const isLoggedIn = accounts && accounts.length > 0;
+
+  const handleLogin = () => {
+    const appId = localStorage.getItem('derivprinter_app_id') || '1089';
+    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&affiliate_token=33h51PQlu5tsWflEmmoxW`;
+  };
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -171,34 +178,58 @@ export default function Header() {
 
         {/* Account Dropdown Toggle */}
         <div ref={dropdownRef} style={{ position: 'relative' }}>
-          <button 
-            onClick={() => setDropdownOpen(!dropdownOpen)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              padding: '4px 8px'
-            }}
-          >
-            <div style={{
-              width: 24, height: 24, borderRadius: '50%',
-              background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>
-              <span style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                {isDemoActive ? 'D' : 'R'}
-              </span>
-            </div>
-            <div className="hidden md:flex flex-col items-end">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>
-                  {isDemoActive ? 'Demo' : 'Real'}
+          {isLoggedIn ? (
+            <button 
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                padding: '4px 8px'
+              }}
+            >
+              <div style={{
+                width: 24, height: 24, borderRadius: '50%',
+                background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-primary)' }}>
+                  {isDemoActive ? 'D' : 'R'}
                 </span>
-                <ChevronDown size={14} color="var(--text-primary)" />
               </div>
-              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--cyan)' }}>
-                {accountInfo?.balance ? accountInfo.balance.toFixed(2) : '0.00'} {accountInfo?.currency || 'USD'}
-              </span>
-            </div>
-          </button>
+              <div className="hidden md:flex flex-col items-end">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>
+                    {isDemoActive ? 'Demo' : 'Real'}
+                  </span>
+                  <ChevronDown size={14} color="var(--text-primary)" />
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--cyan)' }}>
+                  {accountInfo?.balance ? accountInfo.balance.toFixed(2) : '0.00'} {accountInfo?.currency || 'USD'}
+                </span>
+              </div>
+            </button>
+          ) : (
+            <button
+              onClick={handleLogin}
+              style={{
+                background: 'linear-gradient(135deg, var(--cyan) 0%, #00b0ff 100%)',
+                color: '#000',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 14px',
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: 'pointer',
+                boxShadow: '0 4px 10px rgba(0, 229, 255, 0.15)',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              <LogIn size={14} />
+              Connect Deriv
+            </button>
+          )}
 
           {/* Dropdown Menu */}
           {dropdownOpen && (

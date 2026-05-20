@@ -38,6 +38,7 @@ export default function Settings() {
   const logout = useAccountStore(s => s.logout);
   const status = useConnectionStore(s => s.status);
   const accountInfo = useConnectionStore(s => s.account);
+  const [appId, setAppId] = useState(localStorage.getItem('derivprinter_app_id') || '1089');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1000, margin: '0 auto' }}>
@@ -188,6 +189,30 @@ export default function Settings() {
               Account Profile
             </h2>
 
+            {/* App ID Config for OAuth */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+                Deriv App ID (Numeric)
+              </label>
+              <input
+                type="text"
+                value={appId}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, ''); // keep only numbers
+                  setAppId(val);
+                  localStorage.setItem('derivprinter_app_id', val);
+                }}
+                placeholder="Default is 1089"
+                style={{
+                  width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+                  borderRadius: 6, padding: '10px 14px', color: '#fff', fontSize: 13
+                }}
+              />
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                Enter your registered numeric Deriv App ID. Default is 1089 (Demo).
+              </span>
+            </div>
+
             {status === 'authorized' && accountInfo ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -262,13 +287,13 @@ export default function Settings() {
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', textAlign: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0', textAlign: 'center' }}>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
                   No active session. Please log in to your Deriv account.
                 </p>
                 <button
                   onClick={() => {
-                    window.location.href = 'https://oauth.deriv.com/oauth2/authorize?app_id=33h51PQlu5tsWflEmmoxW';
+                    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&affiliate_token=33h51PQlu5tsWflEmmoxW`;
                   }}
                   style={{
                     width: '100%',

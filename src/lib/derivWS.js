@@ -24,7 +24,7 @@ class DerivWebSocket {
   }
 
   getAppId() {
-    return '33h51PQlu5tsWflEmmoxW';
+    return localStorage.getItem('derivprinter_app_id') || '1089';
   }
 
   /* ── Connect ── */
