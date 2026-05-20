@@ -38,9 +38,10 @@ export default function Header() {
   const isLoggedIn = accounts && accounts.length > 0;
 
   const handleLogin = () => {
-    const appId = localStorage.getItem('derivprinter_app_id') || '1089';
-    const redirectUri = encodeURIComponent(window.location.origin);
-    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&redirect_uri=${redirectUri}&affiliate_token=33h51PQlu5tsWflEmmoxW`;
+    const appId = localStorage.getItem('derivprinter_app_id') || '33h51PQlu5tsWflEmmoxW';
+    const origin = window.location.origin;
+    const redirectUri = encodeURIComponent(origin.endsWith('/') ? origin : `${origin}/`);
+    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&redirect_uri=${redirectUri}`;
   };
 
   // Close dropdown on click outside

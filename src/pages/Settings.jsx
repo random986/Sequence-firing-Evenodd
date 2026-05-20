@@ -38,7 +38,7 @@ export default function Settings() {
   const logout = useAccountStore(s => s.logout);
   const status = useConnectionStore(s => s.status);
   const accountInfo = useConnectionStore(s => s.account);
-  const [appId, setAppId] = useState(localStorage.getItem('derivprinter_app_id') || '1089');
+  const [appId, setAppId] = useState(localStorage.getItem('derivprinter_app_id') || '33h51PQlu5tsWflEmmoxW');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1000, margin: '0 auto' }}>
@@ -192,24 +192,24 @@ export default function Settings() {
             {/* App ID Config for OAuth */}
             <div style={{ marginBottom: 20 }}>
               <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
-                Deriv App ID (Numeric)
+                Deriv App ID (Alphanumeric)
               </label>
               <input
                 type="text"
                 value={appId}
                 onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, ''); // keep only numbers
+                  const val = e.target.value.trim();
                   setAppId(val);
                   localStorage.setItem('derivprinter_app_id', val);
                 }}
-                placeholder="Default is 1089"
+                placeholder="Default is 33h51PQlu5tsWflEmmoxW"
                 style={{
                   width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
                   borderRadius: 6, padding: '10px 14px', color: '#fff', fontSize: 13
                 }}
               />
               <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                Enter your registered numeric Deriv App ID. Default is 1089 (Demo).
+                Enter your registered alphanumeric Deriv App ID. Default is 33h51PQlu5tsWflEmmoxW.
               </span>
             </div>
 
@@ -293,8 +293,9 @@ export default function Settings() {
                 </p>
                 <button
                   onClick={() => {
-                    const redirectUri = encodeURIComponent(window.location.origin);
-                    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&redirect_uri=${redirectUri}&affiliate_token=33h51PQlu5tsWflEmmoxW`;
+                    const origin = window.location.origin;
+                    const redirectUri = encodeURIComponent(origin.endsWith('/') ? origin : `${origin}/`);
+                    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&redirect_uri=${redirectUri}`;
                   }}
                   style={{
                     width: '100%',
