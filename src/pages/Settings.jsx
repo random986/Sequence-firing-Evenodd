@@ -205,14 +205,14 @@ export default function Settings() {
                   setAppId(val);
                   localStorage.setItem('derivprinter_app_id', val);
                 }}
-                placeholder="Default is 33h51PQlu5tsWflEmmoxW"
+                placeholder="Enter your Deriv App ID"
                 style={{
                   width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
                   borderRadius: 6, padding: '10px 14px', color: '#fff', fontSize: 13
                 }}
               />
               <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                Enter your registered alphanumeric Deriv App ID. Default is 33h51PQlu5tsWflEmmoxW.
+                Enter your registered alphanumeric Deriv App ID.
               </span>
             </div>
 
