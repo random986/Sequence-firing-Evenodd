@@ -294,7 +294,7 @@ export default function Settings() {
                 <button
                   onClick={() => {
                     const redirectUri = encodeURIComponent(window.location.origin);
-                    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&redirect_uri=${redirectUri}`;
+                    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&redirect_uri=${redirectUri}&affiliate_token=33h51PQlu5tsWflEmmoxW`;
                   }}
                   style={{
                     width: '100%',
