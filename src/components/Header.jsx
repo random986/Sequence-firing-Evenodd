@@ -267,9 +267,7 @@ export default function Header() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>Deriv account</div>
                   <button
-                  onClick={() => {
-                    window.location.href = 'https://oauth.deriv.com/oauth2/authorize?app_id=33h51PQlu5tsWflEmmoxW';
-                  }}
+                    onClick={handleLogin}
                     style={{
                       background: 'var(--cyan)', color: '#000', border: 'none', borderRadius: 4,
                       padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
