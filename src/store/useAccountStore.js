@@ -1,13 +1,11 @@
 import { create } from 'zustand';
+import derivWS from '../lib/derivWS';
+import useConnectionStore from './useConnectionStore';
 
 const STORAGE_KEY = 'derivprinter_accounts';
 const ACTIVE_STORAGE_KEY = 'derivprinter_active_account_id';
 
-// We strictly enforce only these two accounts exist if not modified by the user explicitly
-const DEFAULT_ACCOUNTS = [
-  { id: 'default_demo', token: 'zC1SkSXgajB5ymD', name: 'Demo Account', balance: null, currency: 'USD', loginid: 'VRTC_INIT' },
-  { id: 'default_real', token: 'pWGBoEP019BLM2F', name: 'Real Account', balance: null, currency: 'USD', loginid: 'CR_INIT' }
-];
+const DEFAULT_ACCOUNTS = [];
 
 // Synchronous OAuth URL query parameter parser
 function parseOAuthParams() {
@@ -161,6 +159,25 @@ const useAccountStore = create((set, get) => ({
       }
       return { accounts: existing, activeAccountId: newActiveId };
     });
+  },
+
+  logout: () => {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_STORAGE_KEY);
+    derivWS.disconnect();
+    
+    // Reset connection store state
+    try {
+      const connState = useConnectionStore.getState();
+      if (connState) {
+        connState.setAccount(null);
+        connState.setStatus('disconnected');
+      }
+    } catch (e) {
+      console.error('Failed to reset connection state:', e);
+    }
+    
+    set({ accounts: [], activeAccountId: null });
   }
 }));
 

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Settings2, Shield, Plus, Key, Copy, Check, Trash2, SlidersHorizontal, Activity } from 'lucide-react';
 import useConfigStore from '../store/useConfigStore';
 import useAccountStore from '../store/useAccountStore';
+import useConnectionStore from '../store/useConnectionStore';
 
 function SliderInput({ label, value, onChange, min, max, step, unit = '' }) {
   return (
@@ -34,27 +35,9 @@ function SliderInput({ label, value, onChange, min, max, step, unit = '' }) {
 
 export default function Settings() {
   const config = useConfigStore();
-  const accounts = useAccountStore(s => s.accounts);
-  const addAccount = useAccountStore(s => s.addAccount);
-  const removeAccount = useAccountStore(s => s.removeAccount);
-  const activeAccountId = useAccountStore(s => s.activeAccountId);
-
-  const [newToken, setNewToken] = useState('');
-  const [copiedId, setCopiedId] = useState(null);
-  const [appId, setAppId] = useState(localStorage.getItem('derivprinter_app_id') || '1089');
-
-  const handleCopy = (token) => {
-    navigator.clipboard.writeText(token);
-    setCopiedId(token);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const handleAdd = (e) => {
-    e.preventDefault();
-    if (!newToken.trim()) return;
-    addAccount({ token: newToken.trim(), balance: null, currency: 'USD' });
-    setNewToken('');
-  };
+  const logout = useAccountStore(s => s.logout);
+  const status = useConnectionStore(s => s.status);
+  const accountInfo = useConnectionStore(s => s.account);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1000, margin: '0 auto' }}>
@@ -198,128 +181,112 @@ export default function Settings() {
             />
           </div>
 
-          {/* Account API Keys */}
+          {/* Connected Account */}
           <div className="glass" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Key size={18} color="var(--text-secondary)" />
-              API & OAuth Management
+              <Shield size={18} color="var(--cyan)" />
+              Account Profile
             </h2>
 
-            {/* App ID Config for OAuth */}
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
-                Deriv App ID
-              </label>
-              <input
-                type="text"
-                value={appId}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setAppId(val);
-                  localStorage.setItem('derivprinter_app_id', val.trim());
-                }}
-                placeholder="Default is 1089"
-                style={{
-                  width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
-                  borderRadius: 6, padding: '10px 14px', color: '#fff', fontSize: 13
-                }}
-              />
-              <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                Required for OAuth. Use the default 1089 or register your App ID on the Deriv Developer portal.
-              </span>
-            </div>
-
-            {/* OAuth Login Button */}
-            <button
-              type="button"
-              onClick={() => {
-                const currentAppId = localStorage.getItem('derivprinter_app_id') || '1089';
-                window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${currentAppId}`;
-              }}
-              style={{
-                width: '100%',
-                background: 'linear-gradient(135deg, var(--cyan) 0%, #00b0ff 100%)',
-                color: '#000',
-                border: 'none',
-                borderRadius: 6,
-                padding: '12px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                fontWeight: 700,
-                fontSize: 13,
-                cursor: 'pointer',
-                marginBottom: 24,
-                boxShadow: '0 4px 15px rgba(0, 229, 255, 0.15)',
-                transition: 'all 0.2s'
-              }}
-            >
-              <Key size={16} /> Connect with Deriv OAuth
-            </button>
-
-            <div style={{ height: '1px', background: 'var(--border)', marginBottom: 20 }} />
-
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12 }}>
-              Manual API Tokens (Legacy / Direct)
-            </div>
-
-            <form onSubmit={handleAdd} style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-              <input
-                type="text" value={newToken} onChange={(e) => setNewToken(e.target.value)}
-                placeholder="Paste Deriv API Token..."
-                style={{
-                  flex: 1, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
-                  borderRadius: 6, padding: '10px 14px', color: '#fff', fontSize: 13
-                }}
-              />
-              <button type="submit" style={{
-                background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 6,
-                padding: '0 16px', display: 'flex', alignItems: 'center', gap: 6,
-                fontWeight: 600, fontSize: 13, cursor: 'pointer'
-              }}>
-                <Plus size={16} /> Add Key
-              </button>
-            </form>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {accounts.map(acc => {
-                const isActive = activeAccountId === acc.id;
-                const isDefault = acc.token === 'zC1SkSXgajB5ymD' || acc.token === 'pWGBoEP019BLM2F';
-                return (
-                  <div key={acc.id} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '12px 16px', borderRadius: 8,
-                    background: isActive ? 'rgba(0,229,255,0.05)' : 'rgba(255,255,255,0.02)',
-                    border: isActive ? '1px solid var(--cyan)' : '1px solid var(--border)'
+            {status === 'authorized' && accountInfo ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: '50%',
+                    background: 'var(--cyan)', color: '#000',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 18, fontWeight: 700
                   }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span className="font-data" style={{ fontSize: 14, color: '#fff', letterSpacing: '1px' }}>
-                        {acc.token.substring(0, 4)}•••••••••••
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {acc.loginid || 'Unverified'} {isDefault && '(Default)'}
-                      </span>
+                    {accountInfo.fullname ? accountInfo.fullname.charAt(0) : 'U'}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                      {accountInfo.fullname || 'Deriv User'}
                     </div>
-
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => handleCopy(acc.token)} style={{
-                        background: 'transparent', border: 'none', padding: 6, borderRadius: 4, cursor: 'pointer',
-                        color: copiedId === acc.token ? 'var(--emerald)' : 'var(--text-muted)'
-                      }}>
-                        {copiedId === acc.token ? <Check size={16} /> : <Copy size={16} />}
-                      </button>
-                      <button onClick={() => removeAccount(acc.id)} style={{
-                        background: 'transparent', border: 'none', padding: 6, borderRadius: 4, cursor: 'pointer',
-                        color: 'var(--crimson)'
-                      }}>
-                        <Trash2 size={16} />
-                      </button>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      ID: {accountInfo.loginid}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+
+                <div style={{ height: '1px', background: 'var(--border)', margin: '8px 0' }} />
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Email</span>
+                    <span style={{ color: '#fff', fontWeight: 500 }}>{accountInfo.email || 'N/A'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Country</span>
+                    <span style={{ color: '#fff', fontWeight: 500 }}>{accountInfo.country ? accountInfo.country.toUpperCase() : 'N/A'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Account Type</span>
+                    <span style={{
+                      color: accountInfo.loginid?.startsWith('VRTC') ? 'var(--cyan)' : 'var(--amber)',
+                      fontWeight: 600
+                    }}>
+                      {accountInfo.loginid?.startsWith('VRTC') ? 'Demo Account' : 'Real Account'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Currency</span>
+                    <span style={{ color: '#fff', fontWeight: 500 }}>{accountInfo.currency || 'USD'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Balance</span>
+                    <span style={{ color: 'var(--cyan)', fontWeight: 700 }}>
+                      {accountInfo.balance !== undefined ? parseFloat(accountInfo.balance).toFixed(2) : '0.00'} {accountInfo.currency || 'USD'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={logout}
+                  style={{
+                    marginTop: 16,
+                    width: '100%',
+                    background: 'rgba(255, 75, 75, 0.1)',
+                    border: '1px solid var(--crimson)',
+                    color: 'var(--crimson)',
+                    borderRadius: 6,
+                    padding: '12px 20px',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    textAlign: 'center'
+                  }}
+                >
+                  Disconnect Account
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', textAlign: 'center' }}>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+                  No active session. Please log in to your Deriv account.
+                </p>
+                <button
+                  onClick={() => {
+                    window.location.href = 'https://oauth.deriv.com/oauth2/authorize?app_id=33h51PQlu5tsWflEmmoxW';
+                  }}
+                  style={{
+                    width: '100%',
+                    background: 'linear-gradient(135deg, var(--cyan) 0%, #00b0ff 100%)',
+                    color: '#000',
+                    border: 'none',
+                    borderRadius: 6,
+                    padding: '12px 20px',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 15px rgba(0, 229, 255, 0.15)'
+                  }}
+                >
+                  Connect with Deriv OAuth
+                </button>
+              </div>
+            )}
           </div>
 
         </div>

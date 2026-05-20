@@ -26,6 +26,7 @@ export default function Header() {
   const activeAccountId = useAccountStore(s => s.activeAccountId);
   const setActiveAccountId = useAccountStore(s => s.setActiveAccountId);
   const updateAccountInfo = useAccountStore(s => s.updateAccountInfo);
+  const logout = useAccountStore(s => s.logout);
   
   const status = useConnectionStore(s => s.status);
   const setStatus = useConnectionStore(s => s.setStatus);
@@ -234,10 +235,9 @@ export default function Header() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>Deriv account</div>
                   <button
-                    onClick={() => {
-                      const currentAppId = localStorage.getItem('derivprinter_app_id') || '1089';
-                      window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${currentAppId}`;
-                    }}
+                  onClick={() => {
+                    window.location.href = 'https://oauth.deriv.com/oauth2/authorize?app_id=33h51PQlu5tsWflEmmoxW';
+                  }}
                     style={{
                       background: 'var(--cyan)', color: '#000', border: 'none', borderRadius: 4,
                       padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
@@ -313,9 +313,17 @@ export default function Header() {
                 </div>
               </div>
 
-              <div style={{ padding: '12px 16px', borderTop: '1px solid #e5e7eb', fontSize: 13, color: '#4b5563', textAlign: 'center' }}>
-                Looking for CFD accounts? Go to Trader's Hub
-              </div>
+              <button 
+                onClick={() => { setDropdownOpen(false); logout(); }}
+                style={{
+                  width: '100%', padding: '12px 0', border: 'none', background: 'rgba(255, 68, 79, 0.05)',
+                  fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                  color: 'var(--crimson)', borderTop: '1px solid #e5e7eb',
+                  transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                }}
+              >
+                Log Out / Disconnect
+              </button>
             </div>
           )}
         </div>
