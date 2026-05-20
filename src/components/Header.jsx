@@ -1,16 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { ChevronDown, Printer, LayoutDashboard, Radar, History, Settings, Plus, LogIn } from 'lucide-react';
+import { ChevronDown, Printer, LayoutDashboard, Radar, History, Settings, Plus, LogIn, Moon, Sun, Copy } from 'lucide-react';
 import useAccountStore from '../store/useAccountStore';
 import useConnectionStore from '../store/useConnectionStore';
 import useTradeStore from '../store/useTradeStore';
+import useConfigStore from '../store/useConfigStore';
 import derivWS from '../lib/derivWS';
 import scanner, { MARKETS } from '../lib/marketScanner';
+import { generatePKCE } from '../lib/pkce';
 
 const NAV = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/scanner', icon: Radar, label: 'Scanner' },
   { to: '/history', icon: History, label: 'History' },
+  { to: '/copytrade', icon: Copy, label: 'Copytrade' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -35,12 +38,31 @@ export default function Header() {
   
   const botRunning = useTradeStore(s => s.botRunning);
   
+  const theme = useConfigStore(s => s.theme);
+  const updateConfig = useConfigStore(s => s.updateConfig);
+  
   const isLoggedIn = accounts && accounts.length > 0;
 
-  const handleLogin = () => {
-    const rawAppId = localStorage.getItem('derivprinter_app_id');
-    const appId = (!rawAppId || rawAppId === '1089') ? '33h51PQlu5tsWflEmmoxW' : rawAppId;
-    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}`;
+  const handleLogin = async () => {
+    try {
+      const { codeVerifier, codeChallenge, state } = await generatePKCE();
+      sessionStorage.setItem('oauth_code_verifier', codeVerifier);
+      sessionStorage.setItem('oauth_state', state);
+
+      const params = new URLSearchParams({
+        response_type: 'code',
+        client_id: '33h51PQlu5tsWflEmmoxW',
+        redirect_uri: 'https://derivprinter.beexelgraphics.com',
+        scope: 'trade',
+        state: state,
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256'
+      });
+
+      window.location.href = `https://auth.deriv.com/oauth2/auth?${params.toString()}`;
+    } catch (err) {
+      console.error('Failed to initiate login:', err);
+    }
   };
 
   // Close dropdown on click outside
@@ -56,29 +78,58 @@ export default function Header() {
 
   // Auto-connect to active account on first load
   useEffect(() => {
-    if (status === 'disconnected' && !botRunning) {
+    if (status === 'disconnected' && !botRunning && accounts.length > 0) {
       const activeAcc = accounts.find(a => a.id === activeAccountId);
       if (activeAcc) {
         handleConnect(activeAcc);
       } else {
-        const demoAcc = accounts.find(a => a.loginid?.startsWith('VRTC') || (!a.loginid && a.token === 'zC1SkSXgajB5ymD'));
+        const demoAcc = accounts.find(a => a.is_virtual || a.loginid?.startsWith('VR'));
         if (demoAcc) {
           handleConnect(demoAcc);
         }
       }
     }
-  }, []); // Run once on mount
+  }, [accounts, activeAccountId, status, botRunning]); // Run on mount or when accounts load
 
   // Derive Real/Demo accounts heuristics
-  // CR loginid = Real, VRTC = Demo
-  const demoAccounts = accounts.filter(a => a.loginid?.startsWith('VRTC') || (!a.loginid && a.token === 'zC1SkSXgajB5ymD'));
-  const realAccounts = accounts.filter(a => a.loginid?.startsWith('CR') || (!a.loginid && a.token === 'pWGBoEP019BLM2F'));
+  const demoAccounts = accounts.filter(a => a.is_virtual || a.loginid?.startsWith('VR'));
+  const realAccounts = accounts.filter(a => !a.is_virtual && !a.loginid?.startsWith('VR'));
 
   const currentAccounts = activeTab === 'demo' ? demoAccounts : realAccounts;
   const activeAccount = accounts.find(a => a.id === activeAccountId);
-  const isDemoActive = activeAccount?.loginid?.startsWith('VRTC') || activeAccount?.token === 'zC1SkSXgajB5ymD';
+  const isDemoActive = activeAccount?.is_virtual || activeAccount?.loginid?.startsWith('VR');
 
-  const totalAssets = currentAccounts.reduce((acc, a) => acc + (a.balance || 0), 0);
+  const totalAssets = currentAccounts.reduce((acc, a) => acc + (typeof a.balance === 'number' ? a.balance : 0), 0);
+
+  const fetchBalances = async () => {
+    if (!accounts.length || !accounts[0].token) return;
+    try {
+      const response = await fetch('https://api.derivws.com/trading/v1/options/accounts', {
+        headers: {
+          'Deriv-App-ID': '33h51PQlu5tsWflEmmoxW',
+          'Authorization': `Bearer ${accounts[0].token}`
+        }
+      });
+      if (response.ok) {
+        const result = await response.json();
+        const apiAccounts = result.data || result.accounts || [];
+        apiAccounts.forEach(apiAcc => {
+          const localAcc = useAccountStore.getState().accounts.find(a => a.loginid === apiAcc.account_id);
+          if (localAcc && typeof apiAcc.balance === 'number') {
+            updateAccountInfo(localAcc.id, { balance: apiAcc.balance, currency: apiAcc.currency });
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch background balances', err);
+    }
+  };
+
+  useEffect(() => {
+    if (dropdownOpen) {
+      fetchBalances();
+    }
+  }, [dropdownOpen]);
 
   const handleConnect = (account) => {
     if (botRunning || status === 'connecting') return;
@@ -102,7 +153,7 @@ export default function Header() {
         loginid: info.loginid
       });
     };
-    derivWS.connect(account.token);
+    derivWS.connect(account.token, account.loginid);
   };
 
   const handleTopup = async () => {
@@ -136,10 +187,9 @@ export default function Header() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 32, height: 32, borderRadius: 8,
-            background: 'linear-gradient(135deg, var(--cyan) 0%, var(--bg-primary) 100%)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
-            <Printer size={16} color="#fff" />
+            <img src="/logo.png" alt="Derivprinter Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
           <span className="font-display hidden md:block" style={{ fontSize: 18, fontWeight: 700 }}>Derivprinter</span>
         </div>
@@ -177,6 +227,24 @@ export default function Header() {
           background: status === 'authorized' ? 'var(--cyan)' : 'var(--text-muted)'
         }} />
 
+        {/* Theme Toggle */}
+        <button
+          onClick={() => updateConfig({ theme: theme === 'dark' ? 'light' : 'dark' })}
+          title="Toggle Theme"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-primary)',
+            padding: '4px'
+          }}
+        >
+          {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
+        </button>
+
         {/* Account Dropdown Toggle */}
         <div ref={dropdownRef} style={{ position: 'relative' }}>
           {isLoggedIn ? (
@@ -212,8 +280,8 @@ export default function Header() {
             <button
               onClick={handleLogin}
               style={{
-                background: 'linear-gradient(135deg, var(--cyan) 0%, #00b0ff 100%)',
-                color: '#000',
+                background: 'linear-gradient(135deg, var(--cyan) 0%, #ff6b74 100%)',
+                color: '#fff',
                 border: 'none',
                 borderRadius: 6,
                 padding: '6px 14px',
@@ -243,7 +311,13 @@ export default function Header() {
               {/* Tabs */}
               <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
                 <button 
-                  onClick={() => setActiveTab('real')}
+                  onClick={() => {
+                    setActiveTab('real');
+                    const firstReal = realAccounts[0];
+                    if (firstReal && activeAccountId !== firstReal.id) {
+                      handleConnect(firstReal);
+                    }
+                  }}
                   style={{
                     flex: 1, padding: '12px 0', border: 'none', background: 'transparent',
                     fontWeight: 600, fontSize: 14, cursor: 'pointer',
@@ -252,7 +326,13 @@ export default function Header() {
                   }}
                 >Real</button>
                 <button 
-                  onClick={() => setActiveTab('demo')}
+                  onClick={() => {
+                    setActiveTab('demo');
+                    const firstDemo = demoAccounts[0];
+                    if (firstDemo && activeAccountId !== firstDemo.id) {
+                      handleConnect(firstDemo);
+                    }
+                  }}
                   style={{
                     flex: 1, padding: '12px 0', border: 'none', background: 'transparent',
                     fontWeight: 600, fontSize: 14, cursor: 'pointer',
@@ -266,16 +346,6 @@ export default function Header() {
               <div style={{ padding: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>Deriv account</div>
-                  <button
-                    onClick={handleLogin}
-                    style={{
-                      background: 'var(--cyan)', color: '#000', border: 'none', borderRadius: 4,
-                      padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.2s'
-                    }}
-                  >
-                    <Plus size={12} /> Connect OAuth
-                  </button>
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -323,7 +393,7 @@ export default function Header() {
                         )}
                         {!isCurrent && (
                           <span style={{ fontSize: 14, fontWeight: 600 }}>
-                            {acc.balance !== null ? `${acc.balance.toFixed(2)} ${acc.currency}` : '--'}
+                            {typeof acc.balance === 'number' ? `${acc.balance.toFixed(2)} ${acc.currency}` : '--'}
                           </span>
                         )}
                       </div>

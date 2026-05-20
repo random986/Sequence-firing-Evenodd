@@ -51,7 +51,7 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
           </div>
           <div className="flex flex-col items-end">
             <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Session P&L</span>
-            <span className="font-data" style={{ fontSize: 14, color: stats.pnl >= 0 ? 'var(--cyan)' : 'var(--crimson)', fontWeight: 700 }}>
+            <span className="font-data" style={{ fontSize: 14, color: stats.pnl >= 0 ? 'var(--success)' : 'var(--crimson)', fontWeight: 700 }}>
               {stats.pnl >= 0 ? '+' : ''}${stats.pnl.toFixed(2)}
             </span>
           </div>
@@ -61,7 +61,7 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
           </div>
           <div className="flex flex-col items-end">
             <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Max Payout</span>
-            <span className="font-data" style={{ fontSize: 14, color: 'var(--cyan)', fontWeight: 700 }}>${maxCashout.toFixed(2)}</span>
+            <span className="font-data" style={{ fontSize: 14, color: 'var(--success)', fontWeight: 700 }}>${maxCashout.toFixed(2)}</span>
           </div>
           <button 
             onClick={() => useTradeStore.getState().resetSession()}
@@ -122,13 +122,13 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
                   </td>
                   <td className="font-data text-right" style={{
                     padding: '12px 6px', fontSize: 13, fontWeight: 700,
-                    color: t.won ? 'var(--cyan)' : 'var(--crimson)',
+                    color: t.won ? 'var(--success)' : 'var(--crimson)',
                   }}>
                     {t.won ? '+' : ''}{t.profit.toFixed(2)}
                   </td>
                   <td className="font-data text-right" style={{
                     padding: '12px 6px', fontSize: 14, fontWeight: 800,
-                    color: t.won ? 'var(--cyan)' : 'var(--crimson)',
+                    color: t.won ? 'var(--success)' : 'var(--crimson)',
                   }}>
                     {t.exitTick ? String(t.exitTick).slice(-1) : '-'}
                   </td>

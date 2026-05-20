@@ -79,7 +79,7 @@ export default function BotControl() {
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
         background: botRunning ? 'var(--crimson)' : 'var(--cyan)', 
         color: botRunning ? '#fff' : '#000', fontSize: 16, fontWeight: 800, letterSpacing: '1px',
-        boxShadow: botRunning ? '0 0 40px rgba(255, 68, 79, 0.5)' : '0 0 40px rgba(0, 167, 158, 0.5)',
+        boxShadow: 'none',
         transition: 'background 0.3s'
       }}
     >

@@ -16,12 +16,14 @@ const defaults = {
   baseStake: 0.35,
   maxSteps: 6,
   martMultiplier: 2.0,
-  recoveryEnabled: false,      // Martingale OFF by default — user turns on manually
+  recoveryEnabled: true,      // Martingale ON by default
   switchAfterLosses: 3,
   stopLoss: 5,
   takeProfit: 3,
   cooldownMs: 1000,            // 1 second between trades
   minConfidence: 65,           // don't trade below this signal strength
+  theme: 'light',              // 'light' or 'dark'
+  autoSwitchMarkets: true,     // Switch market after loss
 };
 
 const useConfigStore = create((set, get) => ({

@@ -7,40 +7,6 @@ const ACTIVE_STORAGE_KEY = 'derivprinter_active_account_id';
 
 const DEFAULT_ACCOUNTS = [];
 
-// Synchronous OAuth URL query parameter parser
-function parseOAuthParams() {
-  try {
-    if (typeof window === 'undefined') return [];
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('acct1')) {
-      const oauthAccounts = [];
-      let i = 1;
-      while (urlParams.has(`acct${i}`)) {
-        const loginid = urlParams.get(`acct${i}`);
-        const token = urlParams.get(`token${i}`);
-        const currency = urlParams.get(`cur${i}`) || 'USD';
-        if (token) {
-          oauthAccounts.push({
-            id: loginid,
-            token,
-            loginid,
-            currency,
-            name: loginid.startsWith('VRTC') ? 'Demo Account' : 'Real Account',
-            balance: null
-          });
-        }
-        i++;
-      }
-      return oauthAccounts;
-    }
-  } catch (e) {
-    console.error('Failed to parse OAuth parameters:', e);
-  }
-  return [];
-}
-
-const oauthAccounts = parseOAuthParams();
-
 function loadAccounts() {
   let accounts = [];
   try {
@@ -50,43 +16,25 @@ function loadAccounts() {
     }
   } catch {}
   
+  // Filter out any legacy accounts that don't have a valid loginid or have deprecated tokens
+  accounts = accounts.filter(acc => 
+    acc && 
+    acc.loginid && 
+    acc.token && 
+    acc.token !== 'zC1SkSXgajB5ymD' && 
+    acc.token !== 'pWGBoEP019BLM2F'
+  );
+  
   if (accounts.length === 0) {
     accounts = [...DEFAULT_ACCOUNTS];
   }
   
-  // Cleanup Step: Remove any old default keys that were duplicated in earlier versions
-  accounts = accounts.filter(a => a.token !== 'zC1SkSXgajB5ymD' && a.token !== 'pWGBoEP019BLM2F');
-  accounts = [...DEFAULT_ACCOUNTS, ...accounts];
-
-  // Merge OAuth accounts
-  if (oauthAccounts.length > 0) {
-    oauthAccounts.forEach(newAcc => {
-      const idx = accounts.findIndex(a => a.loginid === newAcc.loginid || a.token === newAcc.token);
-      if (idx !== -1) {
-        accounts[idx] = { ...accounts[idx], ...newAcc };
-      } else {
-        accounts.push(newAcc);
-      }
-    });
-  }
-
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
-  } catch {}
   return accounts;
 }
 
-// Persist the active account ID if oauth accounts are parsed
 let initialActiveId = null;
 try {
   initialActiveId = localStorage.getItem(ACTIVE_STORAGE_KEY);
-  if (oauthAccounts.length > 0) {
-    initialActiveId = oauthAccounts[0].id;
-    localStorage.setItem(ACTIVE_STORAGE_KEY, initialActiveId);
-    
-    // Clear URL query parameters so credentials are not exposed
-    window.history.replaceState({}, document.title, window.location.pathname);
-  }
 } catch {}
 
 const useAccountStore = create((set, get) => ({
@@ -143,7 +91,7 @@ const useAccountStore = create((set, get) => ({
     set((state) => {
       const existing = [...state.accounts];
       oauthAccounts.forEach(newAcc => {
-        const idx = existing.findIndex(a => a.loginid === newAcc.loginid || a.token === newAcc.token);
+        const idx = existing.findIndex(a => a.loginid === newAcc.loginid);
         if (idx !== -1) {
           existing[idx] = { ...existing[idx], ...newAcc };
         } else {

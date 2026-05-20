@@ -4,11 +4,12 @@ import { Wallet, TrendingUp, Activity, BarChart3 } from 'lucide-react';
 import useConfigStore from '../store/useConfigStore';
 import StatCard from '../components/StatCard';
 import TickFeed from '../components/TickFeed';
-import MarketRadar from '../components/MarketRadar';
 import BotControl from '../components/BotControl';
 import TradeHistory from '../components/TradeHistory';
 import useConnectionStore from '../store/useConnectionStore';
 import useTradeStore from '../store/useTradeStore';
+import enhancedTradeEngine from '../lib/enhancedTradeEngine';
+import { MARKETS, MARKET_LABELS } from '../lib/marketScanner';
 
 export default function Dashboard() {
   const balance = useConnectionStore(s => s.balance);
@@ -39,7 +40,53 @@ export default function Dashboard() {
           }}>
             Dashboard
           </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+            {/* Auto Switch Toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8, paddingRight: 8, borderRight: '1px solid var(--border)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Auto Switch:</span>
+              <button 
+                  onClick={() => config.updateConfig({ autoSwitchMarkets: !config.autoSwitchMarkets })}
+                  style={{
+                    width: 36, height: 20, borderRadius: 10,
+                    background: config.autoSwitchMarkets ? 'var(--success)' : 'var(--border)',
+                    border: 'none', position: 'relative', cursor: 'pointer',
+                    transition: 'background 0.2s'
+                  }}
+                >
+                  <div style={{
+                    width: 14, height: 14, borderRadius: '50%', background: '#fff',
+                    position: 'absolute', top: 3,
+                    left: config.autoSwitchMarkets ? 19 : 3,
+                    transition: 'left 0.2s',
+                  }} />
+              </button>
+            </div>
+            
+            {/* Market Selection Dropdown */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8, paddingRight: 8, borderRight: '1px solid var(--border)' }}>
+               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Market:</span>
+               <select
+                 value={enhancedTradeEngine.activeMarket || ''}
+                 onChange={(e) => enhancedTradeEngine.setMarket(e.target.value)}
+                 className="font-data"
+                 style={{
+                   background: 'var(--bg-primary)',
+                   border: '1px solid var(--border)',
+                   borderRadius: 4,
+                   padding: '2px 8px',
+                   color: 'var(--text-primary)',
+                   fontSize: 12,
+                   outline: 'none',
+                   cursor: 'pointer'
+                 }}
+               >
+                 <option value="" disabled>Select...</option>
+                 {MARKETS.map(m => (
+                   <option key={m} value={m}>{MARKET_LABELS[m] || m}</option>
+                 ))}
+               </select>
+            </div>
+
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Strategy:</span>
             <button
               onClick={() => config.updateConfig({ strategy: 'BOTH' })}
@@ -115,7 +162,7 @@ export default function Dashboard() {
               label="Session P&L"
               value={`${stats.pnl >= 0 ? '+' : ''}$${stats.pnl.toFixed(2)}`}
               sub={`${stats.trades} trades`}
-              color={stats.pnl >= 0 ? 'var(--cyan)' : 'var(--crimson)'}
+              color={stats.pnl >= 0 ? 'var(--success)' : 'var(--crimson)'}
               delay={0.05}
             />
             <StatCard
@@ -138,9 +185,6 @@ export default function Dashboard() {
 
           {/* Tick Feed */}
           <TickFeed />
-
-          {/* Market Radar */}
-          <MarketRadar />
 
           {/* Bot Control */}
           <BotControl />

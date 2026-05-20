@@ -5,6 +5,28 @@
    ═══════════════════════════════════════════ */
 
 :root {
+  /* Light mode (default) */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f2f2f2;
+  --bg-card: rgba(255, 255, 255, 0.85);
+  --bg-card-hover: rgba(245, 245, 245, 0.95);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.15);
+  --text-primary: #111111;
+  --text-secondary: #333333;
+  --text-muted: #555555;
+  --cyan: #ff444f; /* Replaced with Deriv Pink */
+  --emerald: #ff444f; /* Replaced with Deriv Pink */
+  --amber: #00a8ff; /* Replaced yellow with bluish color */
+  --crimson: #ff444f;
+  --success: #00e676;
+  --glow-cyan: none;
+  --glow-emerald: none;
+  --glow-crimson: none;
+}
+
+.dark {
+  /* Dark mode */
   --bg-primary: #101010;
   --bg-secondary: #0e0e0e;
   --bg-card: rgba(21, 23, 23, 0.85);
@@ -14,13 +36,14 @@
   --text-primary: #ffffff;
   --text-secondary: #c2c2c2;
   --text-muted: #999999;
-  --cyan: #00a79e; /* Deriv Teal */
-  --emerald: #00a79e; /* Mapped to Teal for wins */
-  --amber: #ff8c00;
-  --crimson: #ff444f; /* Deriv Coral */
-  --glow-cyan: 0 0 20px rgba(0, 167, 158, 0.2);
-  --glow-emerald: 0 0 20px rgba(0, 167, 158, 0.2);
-  --glow-crimson: 0 0 20px rgba(255, 68, 79, 0.2);
+  --cyan: #ff444f; /* Replaced with Deriv Pink */
+  --emerald: #ff444f; /* Replaced with Deriv Pink */
+  --amber: #00a8ff; /* Replaced yellow with bluish color */
+  --crimson: #ff444f;
+  --success: #00e676;
+  --glow-cyan: none;
+  --glow-emerald: none;
+  --glow-crimson: none;
 }
 
 * {
@@ -34,8 +57,8 @@ html, body {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: 'DM Sans', sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;

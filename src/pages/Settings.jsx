@@ -4,6 +4,9 @@ import { Settings2, Shield, Plus, Key, Copy, Check, Trash2, SlidersHorizontal, A
 import useConfigStore from '../store/useConfigStore';
 import useAccountStore from '../store/useAccountStore';
 import useConnectionStore from '../store/useConnectionStore';
+import { generatePKCE } from '../lib/pkce';
+
+
 
 function SliderInput({ label, value, onChange, min, max, step, unit = '' }) {
   return (
@@ -38,10 +41,28 @@ export default function Settings() {
   const logout = useAccountStore(s => s.logout);
   const status = useConnectionStore(s => s.status);
   const accountInfo = useConnectionStore(s => s.account);
-  const [appId, setAppId] = useState(() => {
-    const raw = localStorage.getItem('derivprinter_app_id');
-    return (!raw || raw === '1089') ? '33h51PQlu5tsWflEmmoxW' : raw;
-  });
+
+  const handleLogin = async () => {
+    try {
+      const { codeVerifier, codeChallenge, state } = await generatePKCE();
+      sessionStorage.setItem('oauth_code_verifier', codeVerifier);
+      sessionStorage.setItem('oauth_state', state);
+
+      const params = new URLSearchParams({
+        response_type: 'code',
+        client_id: '33h51PQlu5tsWflEmmoxW',
+        redirect_uri: 'https://derivprinter.beexelgraphics.com',
+        scope: 'trade',
+        state: state,
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256'
+      });
+
+      window.location.href = `https://auth.deriv.com/oauth2/auth?${params.toString()}`;
+    } catch (err) {
+      console.error('Failed to initiate login:', err);
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1000, margin: '0 auto' }}>
@@ -138,6 +159,31 @@ export default function Settings() {
               </div>
             </div>
 
+            <div style={{ padding: '16px 0', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Auto Switch Markets</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Automatically switch market after a loss</div>
+                </div>
+                <button 
+                  onClick={() => config.updateConfig({ autoSwitchMarkets: !config.autoSwitchMarkets })}
+                  style={{
+                    width: 48, height: 26, borderRadius: 13,
+                    background: config.autoSwitchMarkets ? 'var(--success)' : 'var(--border)',
+                    border: 'none', position: 'relative', cursor: 'pointer',
+                    transition: 'background 0.2s'
+                  }}
+                >
+                  <div style={{
+                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    position: 'absolute', top: 3,
+                    left: config.autoSwitchMarkets ? 25 : 3,
+                    transition: 'left 0.2s',
+                  }} />
+                </button>
+              </div>
+            </div>
+
             {config.recoveryEnabled && (
               <SliderInput
                 label="Martingale Multiplier" value={config.martMultiplier} unit="x"
@@ -185,36 +231,42 @@ export default function Settings() {
             />
           </div>
 
+          {/* Theme Settings */}
+          <div className="glass" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Settings2 size={18} color="var(--cyan)" />
+              Appearance
+            </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Dark Mode</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Toggle dark/light theme</div>
+              </div>
+              <button 
+                onClick={() => config.updateConfig({ theme: config.theme === 'dark' ? 'light' : 'dark' })}
+                style={{
+                  width: 44, height: 24, borderRadius: 12,
+                  background: config.theme === 'dark' ? 'var(--cyan)' : 'var(--border)',
+                  border: 'none', position: 'relative', cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+              >
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                  position: 'absolute', top: 2,
+                  left: config.theme === 'dark' ? 22 : 2,
+                  transition: 'left 0.2s',
+                }} />
+              </button>
+            </div>
+          </div>
+
           {/* Connected Account */}
           <div className="glass" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Shield size={18} color="var(--cyan)" />
               Account Profile
             </h2>
-
-            {/* App ID Config for OAuth */}
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
-                Deriv App ID (Alphanumeric)
-              </label>
-              <input
-                type="text"
-                value={appId}
-                onChange={(e) => {
-                  const val = e.target.value.trim();
-                  setAppId(val);
-                  localStorage.setItem('derivprinter_app_id', val);
-                }}
-                placeholder="Enter your Deriv App ID"
-                style={{
-                  width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
-                  borderRadius: 6, padding: '10px 14px', color: '#fff', fontSize: 13
-                }}
-              />
-              <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                Enter your registered alphanumeric Deriv App ID.
-              </span>
-            </div>
 
             {status === 'authorized' && accountInfo ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -228,7 +280,7 @@ export default function Settings() {
                     {accountInfo.fullname ? accountInfo.fullname.charAt(0) : 'U'}
                   </div>
                   <div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
                       {accountInfo.fullname || 'Deriv User'}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -240,26 +292,10 @@ export default function Settings() {
                 <div style={{ height: '1px', background: 'var(--border)', margin: '8px 0' }} />
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Email</span>
-                    <span style={{ color: '#fff', fontWeight: 500 }}>{accountInfo.email || 'N/A'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Country</span>
-                    <span style={{ color: '#fff', fontWeight: 500 }}>{accountInfo.country ? accountInfo.country.toUpperCase() : 'N/A'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Account Type</span>
-                    <span style={{
-                      color: accountInfo.loginid?.startsWith('VRTC') ? 'var(--cyan)' : 'var(--amber)',
-                      fontWeight: 600
-                    }}>
-                      {accountInfo.loginid?.startsWith('VRTC') ? 'Demo Account' : 'Real Account'}
-                    </span>
-                  </div>
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                     <span style={{ color: 'var(--text-secondary)' }}>Currency</span>
-                    <span style={{ color: '#fff', fontWeight: 500 }}>{accountInfo.currency || 'USD'}</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{accountInfo.currency || 'USD'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                     <span style={{ color: 'var(--text-secondary)' }}>Balance</span>
@@ -295,9 +331,7 @@ export default function Settings() {
                   No active session. Please log in to your Deriv account.
                 </p>
                 <button
-                  onClick={() => {
-                    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}`;
-                  }}
+                  onClick={handleLogin}
                   style={{
                     width: '100%',
                     background: 'linear-gradient(135deg, var(--cyan) 0%, #00b0ff 100%)',

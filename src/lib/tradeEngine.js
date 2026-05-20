@@ -7,6 +7,7 @@
 import derivWS from './derivWS.js';
 import scanner from './marketScanner.js';
 import riskManager from './riskManager.js';
+import copyTradeEngine from './copyTradeEngine.js';
 
 const CONTRACT_MAP = {
   OVER5:  { contract_type: 'DIGITOVER',  barrier: '5' },
@@ -145,39 +146,74 @@ class TradeEngine {
     const spec = CONTRACT_MAP[direction];
     if (!spec) return;
 
-    const payload = {
-      buy: '1',
-      price: stake,
-      parameters: {
-        contract_type: spec.contract_type,
-        symbol: this.activeMarket,
-        duration: 1,
-        duration_unit: 't',
-        currency: derivWS.accountInfo?.currency || 'USD',
-        basis: 'stake',
-        amount: stake,
-      },
+    const numericStake = parseFloat(stake) || 0.35;
+
+    const proposalPayload = {
+      proposal: 1,
+      amount: numericStake,
+      basis: 'stake',
+      contract_type: spec.contract_type,
+      currency: derivWS.accountInfo?.currency || 'USD',
+      duration: 1,
+      duration_unit: 't',
+      underlying_symbol: this.activeMarket,
     };
-    if (spec.barrier) payload.parameters.barrier = spec.barrier;
+    if (spec.barrier) proposalPayload.barrier = spec.barrier;
 
     const channel = this.channels[channelKey];
     channel.active = true;
     channel.direction = direction;
-    channel.stake = stake;
+    channel.stake = numericStake;
 
     try {
-      const res = await derivWS.send(payload);
+      // Step 1: Request Proposal
+      const propRes = await derivWS.send(proposalPayload);
+      if (propRes.error) {
+        channel.active = false;
+        channel.direction = null;
+        this.stop(`${propRes.error.message} | Payload: ${JSON.stringify(proposalPayload)}`);
+        return;
+      }
+
+      if (!propRes.proposal || !propRes.proposal.id) {
+        channel.active = false;
+        channel.direction = null;
+        this.stop(`No proposal ID returned`);
+        return;
+      }
+
+      // Step 2: Execute Buy
+      const buyPayload = {
+        buy: propRes.proposal.id,
+        price: propRes.proposal.ask_price
+      };
+
+      const res = await derivWS.send(buyPayload);
+      
       if (res.error) {
         console.error(`Trade error [${direction}]:`, res.error.message);
         channel.active = false;
         channel.direction = null;
-        if (this.running) this._scheduleNext(2000);
+        const details = res.error.details ? JSON.stringify(res.error.details) : '';
+        this.stop(`${res.error.message} | Details: ${details}`);
         return;
       }
 
       if (res.buy) {
         channel.contractId = res.buy.contract_id;
         derivWS.sendRaw({ proposal_open_contract: 1, contract_id: channel.contractId, subscribe: 1 });
+        
+        // MIRROR TO DEMO IF COPYTRADE IS ACTIVE
+        if (copyTradeEngine.active) {
+          copyTradeEngine.copyTrade({
+            contractType: contractType,
+            symbol: this.activeMarket,
+            amount: buyPrice,
+            duration: 1,
+            durationUnit: 't',
+            barrier: undefined // tradeEngine.js doesn't currently use barriers
+          });
+        }
       }
     } catch (e) {
       console.error(`Trade failed [${direction}]:`, e);
@@ -217,7 +253,7 @@ class TradeEngine {
       stake: buyPrice,
       profit,
       won,
-      exitTick: contract.exit_tick_display_value || contract.exit_tick || '',
+      exitTick: contract.current_spot_display_value || contract.exit_tick_display_value || contract.sell_spot_display_value || contract.current_spot || contract.sell_spot || '',
       time: Date.now(),
     };
 
@@ -268,6 +304,7 @@ class TradeEngine {
   }
 
   _switchMarket() {
+    if (this.config && this.config.autoSwitchMarkets === false) return;
     const ranked = scanner.getRanked(this.strategy);
     const next = ranked.find(m => m.symbol !== this.activeMarket);
     if (next) {

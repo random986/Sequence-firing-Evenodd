@@ -24,18 +24,18 @@ class DerivWebSocket {
   }
 
   getAppId() {
-    const rawAppId = localStorage.getItem('derivprinter_app_id');
-    return (!rawAppId || rawAppId === '1089') ? '33h51PQlu5tsWflEmmoxW' : rawAppId;
+    return '33h51PQlu5tsWflEmmoxW';
   }
 
   /* ── Connect ── */
-  connect(token) {
+  connect(token, accountId) {
     this.token = token;
+    this.accountId = accountId;
     this.reconnectAttempts = 0;
     this._connect();
   }
 
-  _connect() {
+  async _connect() {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
     }
@@ -43,10 +43,42 @@ class DerivWebSocket {
     this.status = 'connecting';
     this._emitStatus();
 
+    let wsUrl = `${WS_URL}?app_id=${this.getAppId()}`;
+
+    if (this.token && this.accountId) {
+      try {
+        const response = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${this.accountId}/otp`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.token}`,
+            'Deriv-App-ID': this.getAppId()
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch OTP url: ' + response.status);
+        }
+        
+        const data = await response.json();
+        const finalUrl = data?.data?.url || data?.url;
+        if (finalUrl) {
+          wsUrl = finalUrl;
+        } else {
+          throw new Error('OTP response did not contain a URL');
+        }
+      } catch (err) {
+        console.error('Failed to get OTP URL:', err);
+        this.status = 'error';
+        this._emitStatus();
+        this._scheduleReconnect();
+        return;
+      }
+    }
+
     try {
-      const appId = this.getAppId();
-      this.ws = new WebSocket(`${WS_URL}?app_id=${appId}`);
+      this.ws = new WebSocket(wsUrl);
     } catch (e) {
+      console.error('Connection setup failed:', e);
       this.status = 'error';
       this._emitStatus();
       this._scheduleReconnect();
@@ -54,31 +86,35 @@ class DerivWebSocket {
     }
 
     this.ws.onopen = () => {
-      this.status = 'connected';
       this.reconnectAttempts = 0;
-      this._emitStatus();
 
-      if (this.token) {
-        this.send({ authorize: this.token }).then(res => {
-          if (res.error) {
-            console.error('Auth failed:', res.error.message);
-            this.status = 'error';
-            this._emitStatus();
-            return;
+      // If we connected with token/accountId via OTP, we are automatically authorized
+      if (this.token && this.accountId) {
+        this.status = 'authorized';
+        this.accountInfo = {
+          loginid: this.accountId,
+          balance: 0,
+          currency: 'USD',
+        };
+        this._emitStatus();
+        if (this.onAccountUpdate) this.onAccountUpdate(this.accountInfo);
+
+        // Fetch initial balance using a direct request if needed, or rely on subscription
+        this.send({ balance: 1, subscribe: 1 }).then(balRes => {
+          if (balRes && balRes.balance) {
+            this.accountInfo.balance = parseFloat(balRes.balance.balance);
+            this.accountInfo.currency = balRes.balance.currency;
+            if (this.onAccountUpdate) this.onAccountUpdate(this.accountInfo);
           }
-          this.status = 'authorized';
-          this.accountInfo = res.authorize;
-          this._emitStatus();
-          if (this.onAccountUpdate) this.onAccountUpdate(this.accountInfo);
+        }).catch(err => console.error('Balance subscribe failed:', err));
 
-          // Subscribe to balance updates
-          this.send({ balance: 1, subscribe: 1 });
-
-          // Re-subscribe to any active tick streams
-          this.tickSubscriptions.forEach(sym => {
-            this.send({ ticks: sym, subscribe: 1 });
-          });
+        // Re-subscribe to any active tick streams
+        this.tickSubscriptions.forEach(sym => {
+          this.send({ ticks: sym, subscribe: 1 });
         });
+      } else {
+        this.status = 'connected';
+        this._emitStatus();
       }
     };
 
@@ -90,8 +126,9 @@ class DerivWebSocket {
       if (msg.msg_type === 'balance' && msg.balance) {
         if (this.accountInfo) {
           this.accountInfo.balance = parseFloat(msg.balance.balance);
+          this.accountInfo.currency = msg.balance.currency || this.accountInfo.currency;
         }
-        if (this.onAccountUpdate) this.onAccountUpdate({ ...this.accountInfo, balance: parseFloat(msg.balance.balance) });
+        if (this.onAccountUpdate) this.onAccountUpdate({ ...this.accountInfo });
       }
 
       // Route to pending request callbacks
