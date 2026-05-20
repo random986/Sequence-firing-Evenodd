@@ -296,9 +296,7 @@ export default function Settings() {
                 </p>
                 <button
                   onClick={() => {
-                    const origin = window.location.origin;
-                    const redirectUri = encodeURIComponent(origin.endsWith('/') ? origin : `${origin}/`);
-                    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&redirect_uri=${redirectUri}`;
+                    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}`;
                   }}
                   style={{
                     width: '100%',
