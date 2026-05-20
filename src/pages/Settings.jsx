@@ -41,6 +41,7 @@ export default function Settings() {
 
   const [newToken, setNewToken] = useState('');
   const [copiedId, setCopiedId] = useState(null);
+  const [appId, setAppId] = useState(localStorage.getItem('derivprinter_app_id') || '1089');
 
   const handleCopy = (token) => {
     navigator.clipboard.writeText(token);
@@ -201,9 +202,68 @@ export default function Settings() {
           <div className="glass" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Key size={18} color="var(--text-secondary)" />
-              API Management
+              API & OAuth Management
             </h2>
-            
+
+            {/* App ID Config for OAuth */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+                Deriv App ID
+              </label>
+              <input
+                type="text"
+                value={appId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setAppId(val);
+                  localStorage.setItem('derivprinter_app_id', val.trim());
+                }}
+                placeholder="Default is 1089"
+                style={{
+                  width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+                  borderRadius: 6, padding: '10px 14px', color: '#fff', fontSize: 13
+                }}
+              />
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                Required for OAuth. Use the default 1089 or register your App ID on the Deriv Developer portal.
+              </span>
+            </div>
+
+            {/* OAuth Login Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const currentAppId = localStorage.getItem('derivprinter_app_id') || '1089';
+                window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${currentAppId}`;
+              }}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, var(--cyan) 0%, #00b0ff 100%)',
+                color: '#000',
+                border: 'none',
+                borderRadius: 6,
+                padding: '12px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: 'pointer',
+                marginBottom: 24,
+                boxShadow: '0 4px 15px rgba(0, 229, 255, 0.15)',
+                transition: 'all 0.2s'
+              }}
+            >
+              <Key size={16} /> Connect with Deriv OAuth
+            </button>
+
+            <div style={{ height: '1px', background: 'var(--border)', marginBottom: 20 }} />
+
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              Manual API Tokens (Legacy / Direct)
+            </div>
+
             <form onSubmit={handleAdd} style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               <input
                 type="text" value={newToken} onChange={(e) => setNewToken(e.target.value)}
@@ -214,7 +274,7 @@ export default function Settings() {
                 }}
               />
               <button type="submit" style={{
-                background: 'var(--cyan)', color: '#000', border: 'none', borderRadius: 6,
+                background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 6,
                 padding: '0 16px', display: 'flex', alignItems: 'center', gap: 6,
                 fontWeight: 600, fontSize: 13, cursor: 'pointer'
               }}>

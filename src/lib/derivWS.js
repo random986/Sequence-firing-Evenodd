@@ -5,7 +5,6 @@
    ══════════════════════════════════════════════════════════════ */
 
 const WS_URL = 'wss://ws.derivws.com/websockets/v3';
-const APP_ID = 1089;
 
 class DerivWebSocket {
   constructor() {
@@ -24,6 +23,10 @@ class DerivWebSocket {
     this.onAccountUpdate = null;
   }
 
+  getAppId() {
+    return localStorage.getItem('derivprinter_app_id') || '1089';
+  }
+
   /* ── Connect ── */
   connect(token) {
     this.token = token;
@@ -40,7 +43,8 @@ class DerivWebSocket {
     this._emitStatus();
 
     try {
-      this.ws = new WebSocket(`${WS_URL}?app_id=${APP_ID}`);
+      const appId = this.getAppId();
+      this.ws = new WebSocket(`${WS_URL}?app_id=${appId}`);
     } catch (e) {
       this.status = 'error';
       this._emitStatus();

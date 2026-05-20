@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { ChevronDown, Printer, LayoutDashboard, Radar, History, Settings } from 'lucide-react';
+import { ChevronDown, Printer, LayoutDashboard, Radar, History, Settings, Plus } from 'lucide-react';
 import useAccountStore from '../store/useAccountStore';
 import useConnectionStore from '../store/useConnectionStore';
 import useTradeStore from '../store/useTradeStore';
@@ -45,12 +45,17 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownRef]);
 
-  // Auto-connect to Demo account on first load
+  // Auto-connect to active account on first load
   useEffect(() => {
     if (status === 'disconnected' && !botRunning) {
-      const demoAcc = accounts.find(a => a.loginid?.startsWith('VRTC') || (!a.loginid && a.token === 'zC1SkSXgajB5ymD'));
-      if (demoAcc) {
-        handleConnect(demoAcc);
+      const activeAcc = accounts.find(a => a.id === activeAccountId);
+      if (activeAcc) {
+        handleConnect(activeAcc);
+      } else {
+        const demoAcc = accounts.find(a => a.loginid?.startsWith('VRTC') || (!a.loginid && a.token === 'zC1SkSXgajB5ymD'));
+        if (demoAcc) {
+          handleConnect(demoAcc);
+        }
       }
     }
   }, []); // Run once on mount
@@ -226,7 +231,22 @@ export default function Header() {
 
               {/* Account List */}
               <div style={{ padding: '16px' }}>
-                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Deriv account</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>Deriv account</div>
+                  <button
+                    onClick={() => {
+                      const currentAppId = localStorage.getItem('derivprinter_app_id') || '1089';
+                      window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${currentAppId}`;
+                    }}
+                    style={{
+                      background: 'var(--cyan)', color: '#000', border: 'none', borderRadius: 4,
+                      padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.2s'
+                    }}
+                  >
+                    <Plus size={12} /> Connect OAuth
+                  </button>
+                </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {currentAccounts.map(acc => {
