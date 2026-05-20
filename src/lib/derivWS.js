@@ -24,7 +24,8 @@ class DerivWebSocket {
   }
 
   getAppId() {
-    return localStorage.getItem('derivprinter_app_id') || '33h51PQlu5tsWflEmmoxW';
+    const rawAppId = localStorage.getItem('derivprinter_app_id');
+    return (!rawAppId || rawAppId === '1089') ? '33h51PQlu5tsWflEmmoxW' : rawAppId;
   }
 
   /* ── Connect ── */

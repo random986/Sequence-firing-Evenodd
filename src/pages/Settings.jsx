@@ -38,7 +38,10 @@ export default function Settings() {
   const logout = useAccountStore(s => s.logout);
   const status = useConnectionStore(s => s.status);
   const accountInfo = useConnectionStore(s => s.account);
-  const [appId, setAppId] = useState(localStorage.getItem('derivprinter_app_id') || '33h51PQlu5tsWflEmmoxW');
+  const [appId, setAppId] = useState(() => {
+    const raw = localStorage.getItem('derivprinter_app_id');
+    return (!raw || raw === '1089') ? '33h51PQlu5tsWflEmmoxW' : raw;
+  });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1000, margin: '0 auto' }}>

@@ -38,7 +38,8 @@ export default function Header() {
   const isLoggedIn = accounts && accounts.length > 0;
 
   const handleLogin = () => {
-    const appId = localStorage.getItem('derivprinter_app_id') || '33h51PQlu5tsWflEmmoxW';
+    const rawAppId = localStorage.getItem('derivprinter_app_id');
+    const appId = (!rawAppId || rawAppId === '1089') ? '33h51PQlu5tsWflEmmoxW' : rawAppId;
     const origin = window.location.origin;
     const redirectUri = encodeURIComponent(origin.endsWith('/') ? origin : `${origin}/`);
     window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&redirect_uri=${redirectUri}`;
