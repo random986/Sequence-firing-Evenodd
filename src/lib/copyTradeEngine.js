@@ -73,27 +73,35 @@ class CopyTradeEngine {
 
     const cleanAmount = Number(Number(amount).toFixed(2));
 
-    const proposal = {
-      buy: 1,
-      subscribe: 1,
-      price: cleanAmount,
-      parameters: {
-        contract_type: contractType,
-        symbol: symbol,
-        amount: cleanAmount,
-        basis: 'stake',
-        duration: duration,
-        duration_unit: durationUnit,
-        currency: currency,
-      }
+    const proposalPayload = {
+      proposal: 1,
+      amount: cleanAmount,
+      basis: 'stake',
+      contract_type: contractType,
+      currency: currency,
+      symbol: symbol,
+      duration: duration,
+      duration_unit: durationUnit
     };
-    if (barrier !== null && barrier !== undefined) proposal.parameters.barrier = String(barrier);
+    if (barrier !== null && barrier !== undefined) proposalPayload.barrier = String(barrier);
 
     const dirLabel = this.direction === 'demo_to_real' ? 'Demo→Real' : 'Real→Demo';
     this._log(`📋 [${dirLabel}] Copying → ${contractType} on ${symbol} @ $${amount}`);
 
     try {
-      const result = await this._send(proposal);
+      const propRes = await this._send(proposalPayload);
+      if (propRes.error) {
+        this._log(`❌ Proposal failed: ${propRes.error.message}`);
+        return;
+      }
+      
+      const buyPayload = {
+        buy: propRes.proposal.id,
+        price: propRes.proposal.ask_price,
+        subscribe: 1
+      };
+      
+      const result = await this._send(buyPayload);
       if (result.error) {
         this._log(`❌ Copy failed: ${result.error.message}`);
       } else {

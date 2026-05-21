@@ -585,21 +585,18 @@ class EnhancedTradeEngine {
 
     const cleanStake = Number(Number(stake).toFixed(2));
 
-    const payload = {
-      buy: 1,
-      price: cleanStake,
-      parameters: {
-        contract_type: spec.contract_type,
-        symbol: this.activeMarket,
-        duration: 1,
-        duration_unit: 't',
-        currency: derivWS.accountInfo?.currency || 'USD',
-        basis: 'stake',
-        amount: cleanStake,
-      },
+    const proposalPayload = {
+      proposal: 1,
+      amount: cleanStake,
+      basis: 'stake',
+      contract_type: spec.contract_type,
+      currency: derivWS.accountInfo?.currency || 'USD',
+      symbol: this.activeMarket,
+      duration: 1,
+      duration_unit: 't'
     };
-    if (dynamicBarrier !== null && dynamicBarrier !== undefined) payload.parameters.barrier = String(dynamicBarrier);
-    else if (spec.barrier !== null && spec.barrier !== undefined) payload.parameters.barrier = String(spec.barrier);
+    if (dynamicBarrier !== null && dynamicBarrier !== undefined) proposalPayload.barrier = String(dynamicBarrier);
+    else if (spec.barrier !== null && spec.barrier !== undefined) proposalPayload.barrier = String(spec.barrier);
 
     const channel = this.channels[channelKey];
     channel.active = true;
@@ -617,7 +614,30 @@ class EnhancedTradeEngine {
     }
 
     try {
-      const res = await derivWS.send(payload);
+      const propRes = await derivWS.send(proposalPayload);
+      if (propRes.error) {
+        this.sendLog(`❌ Proposal error [${direction}]: ${propRes.error.message}`);
+        channel.active = false;
+        channel.direction = null;
+        
+        if (this.config.autoSwitchMarkets !== false) {
+          this.sendLog(`Rotating market due to proposal error...`);
+          if (this.strategy === 'MATCHES' || this.strategy === 'MATCH_DIFF') {
+            this._switchMarket(direction);
+          } else {
+            this._switchMarketLegacy(direction);
+          }
+        }
+        if (this.running) this._scheduleNext(5000);
+        return;
+      }
+
+      const buyPayload = {
+        buy: propRes.proposal.id,
+        price: propRes.proposal.ask_price
+      };
+
+      const res = await derivWS.send(buyPayload);
       if (res.error) {
         this.sendLog(`❌ Trade error [${direction}]: ${res.error.message}`);
         channel.active = false;
