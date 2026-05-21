@@ -168,21 +168,15 @@ export default function Header() {
   };
 
   return (
-    <header style={{
-      height: 60,
+    <header className="fixed top-0 left-0 right-0 z-50 flex flex-col sm:flex-row sm:items-center sm:justify-between px-2 sm:px-4" style={{
       background: 'var(--bg-secondary)',
       borderBottom: '1px solid var(--border)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '0 16px',
-      position: 'fixed',
-      top: 0, left: 0, right: 0,
-      zIndex: 50
+      minHeight: 60
     }}>
       
-      {/* Left: Logo and Nav Links */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 32, height: '100%' }}>
+      {/* Top Row: Logo & Account (Always visible, full width on mobile) */}
+      <div className="flex items-center justify-between w-full sm:w-auto h-[60px]">
+        
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
@@ -194,35 +188,90 @@ export default function Header() {
           <span className="font-display hidden md:block" style={{ fontSize: 18, fontWeight: 700 }}>Derivprinter</span>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex items-center gap-1 sm:gap-2 h-full ml-2 sm:ml-4">
-          {NAV.map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '0 8px', height: '100%',
-                color: isActive ? 'var(--cyan)' : 'var(--text-muted)',
-                fontWeight: isActive ? 600 : 500,
-                borderBottom: isActive ? '2px solid var(--cyan)' : '2px solid transparent',
-                textDecoration: 'none',
-                transition: 'all 0.2s',
-              })}
-              title={label}
-            >
-              <Icon size={18} />
-              <span className="hidden md:block" style={{ fontSize: 13 }}>{label}</span>
-            </NavLink>
-          ))}
-        </nav>
+        {/* Right: Account & Dropdown (Moved here for mobile) */}
+        <div className="flex sm:hidden items-center gap-2">
+          
+          {/* Connection Status Dot */}
+          <div style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: status === 'authorized' ? 'var(--cyan)' : 'var(--text-muted)'
+          }} />
+
+          {/* Theme Toggle */}
+          <button
+            onClick={() => updateConfig({ theme: theme === 'dark' ? 'light' : 'dark' })}
+            title="Toggle Theme"
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--text-primary)', padding: '4px'
+            }}
+          >
+            {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
+          </button>
+
+          {/* Account Dropdown Toggle (Mobile Version - Shows Amount) */}
+          <div ref={dropdownRef} style={{ position: 'relative' }}>
+            {isLoggedIn ? (
+              <button 
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  padding: '2px 4px'
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 10, color: 'var(--text-primary)' }}>
+                      {isDemoActive ? 'Demo' : 'Real'}
+                    </span>
+                    <ChevronDown size={12} color="var(--text-primary)" />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--cyan)' }}>
+                    {accountInfo?.balance ? accountInfo.balance.toFixed(2) : '0.00'} {accountInfo?.currency || 'USD'}
+                  </span>
+                </div>
+              </button>
+            ) : (
+              <button onClick={handleLogin} className="text-[11px] font-bold px-3 py-1.5 rounded" style={{ background: 'linear-gradient(135deg, var(--cyan) 0%, #ff6b74 100%)', color: '#fff' }}>
+                Connect
+              </button>
+            )}
+            
+            {/* We will rely on the desktop dropdown logic later for the actual popup, but we need to ensure the popup renders correctly. Wait, we shouldn't duplicate the dropdown UI. Let's just have ONE dropdown UI and place it in a common container or duplicate just the toggle button. */}
+          </div>
+        </div>
       </div>
 
-      {/* Right: Account & Dropdown */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      {/* Navigation (Row 2 on mobile, next to logo on desktop) */}
+      <nav className="flex items-center justify-between sm:justify-start gap-1 sm:gap-2 h-[50px] sm:h-[60px] w-full sm:w-auto overflow-x-auto sm:ml-4 border-t sm:border-none border-gray-200 dark:border-gray-800">
+        {NAV.map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            style={({ isActive }) => ({
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '0 8px', height: '100%',
+              color: isActive ? 'var(--cyan)' : 'var(--text-muted)',
+              fontWeight: isActive ? 600 : 500,
+              borderBottom: isActive ? '2px solid var(--cyan)' : '2px solid transparent',
+              textDecoration: 'none',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap'
+            })}
+            title={label}
+          >
+            <Icon size={16} />
+            <span style={{ fontSize: 12 }}>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Right: Account & Dropdown (Desktop Only) */}
+      <div className="hidden sm:flex items-center gap-4 h-[60px]">
         
-        {/* Connection Status Dot (Mobile only) */}
-        <div className="md:hidden" style={{
+        {/* Connection Status Dot (Desktop only) */}
+        <div className="hidden md:block" style={{
           width: 8, height: 8, borderRadius: '50%',
           background: status === 'authorized' ? 'var(--cyan)' : 'var(--text-muted)'
         }} />
@@ -264,7 +313,7 @@ export default function Header() {
                   {isDemoActive ? 'D' : 'R'}
                 </span>
               </div>
-              <div className="hidden md:flex flex-col items-end">
+              <div className="flex flex-col items-end">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>
                     {isDemoActive ? 'Demo' : 'Real'}
@@ -428,6 +477,128 @@ export default function Header() {
           )}
         </div>
       </div>
+
+      {/* Mobile Dropdown Popup Container */}
+      {dropdownOpen && (
+        <div className="sm:hidden fixed top-[60px] left-0 right-0 z-50 bg-[#ffffff] shadow-lg rounded-b-xl border-t border-gray-200 overflow-hidden text-gray-800">
+           {/* Tabs */}
+           <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
+             <button 
+               onClick={() => {
+                 setActiveTab('real');
+                 const firstReal = realAccounts[0];
+                 if (firstReal && activeAccountId !== firstReal.id) {
+                   handleConnect(firstReal);
+                 }
+               }}
+               style={{
+                 flex: 1, padding: '12px 0', border: 'none', background: 'transparent',
+                 fontWeight: 600, fontSize: 14, cursor: 'pointer',
+                 borderBottom: activeTab === 'real' ? '2px solid var(--crimson)' : '2px solid transparent',
+                 color: activeTab === 'real' ? '#333' : '#999'
+               }}
+             >Real</button>
+             <button 
+               onClick={() => {
+                 setActiveTab('demo');
+                 const firstDemo = demoAccounts[0];
+                 if (firstDemo && activeAccountId !== firstDemo.id) {
+                   handleConnect(firstDemo);
+                 }
+               }}
+               style={{
+                 flex: 1, padding: '12px 0', border: 'none', background: 'transparent',
+                 fontWeight: 600, fontSize: 14, cursor: 'pointer',
+                 borderBottom: activeTab === 'demo' ? '2px solid var(--crimson)' : '2px solid transparent',
+                 color: activeTab === 'demo' ? '#333' : '#999'
+               }}
+             >Demo</button>
+           </div>
+
+           {/* Account List */}
+           <div style={{ padding: '16px', maxHeight: '400px', overflowY: 'auto' }}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+               <div style={{ fontSize: 14, fontWeight: 700 }}>Deriv account</div>
+             </div>
+             
+             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+               {currentAccounts.map(acc => {
+                 const isCurrent = activeAccountId === acc.id;
+                 return (
+                   <div 
+                     key={acc.id}
+                     onClick={() => { if(!isCurrent) { handleConnect(acc); setDropdownOpen(false); } }}
+                     style={{
+                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                       padding: '12px', borderRadius: 8,
+                       background: isCurrent ? '#f3f4f6' : 'transparent',
+                       border: isCurrent ? '1px solid #e5e7eb' : '1px solid transparent',
+                       cursor: isCurrent ? 'default' : 'pointer',
+                     }}
+                   >
+                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                       <div style={{
+                         width: 24, height: 24, borderRadius: '50%', background: '#9ca3af',
+                         display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700
+                       }}>
+                         {activeTab === 'demo' ? 'D' : 'R'}
+                       </div>
+                       <div style={{ display: 'flex', flexDirection: 'column' }}>
+                         <span style={{ fontSize: 14, fontWeight: 700 }}>
+                           {activeTab === 'demo' ? 'Demo' : 'Real'}
+                         </span>
+                         <span style={{ fontSize: 11, color: '#6b7280' }}>{acc.loginid || 'No ID'}</span>
+                       </div>
+                     </div>
+                     
+                     {isCurrent && activeTab === 'demo' && (
+                       <button 
+                         onClick={(e) => { e.stopPropagation(); handleTopup(); }}
+                         disabled={topupLoading}
+                         style={{
+                           padding: '4px 12px', border: '1px solid #d1d5db', borderRadius: 4,
+                           background: '#fff', fontSize: 12, fontWeight: 600, cursor: topupLoading ? 'wait' : 'pointer'
+                         }}
+                       >
+                         {topupLoading ? 'Resetting...' : 'Reset balance'}
+                       </button>
+                     )}
+                     {!isCurrent && (
+                       <span style={{ fontSize: 14, fontWeight: 600 }}>
+                         {typeof acc.balance === 'number' ? `${acc.balance.toFixed(2)} ${acc.currency}` : '--'}
+                       </span>
+                     )}
+                   </div>
+                 );
+               })}
+             </div>
+
+             {/* Total Assets */}
+             <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                 <span style={{ fontSize: 14, fontWeight: 700 }}>Total assets</span>
+                 <span style={{ fontSize: 14 }}>{totalAssets.toFixed(2)} USD</span>
+               </div>
+               <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                 Total assets in your Deriv accounts.
+               </div>
+             </div>
+           </div>
+
+           <button 
+             onClick={() => { setDropdownOpen(false); logout(); }}
+             style={{
+               width: '100%', padding: '12px 0', border: 'none', background: 'rgba(255, 68, 79, 0.05)',
+               fontWeight: 600, fontSize: 13, cursor: 'pointer',
+               color: 'var(--crimson)', borderTop: '1px solid #e5e7eb',
+               transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+             }}
+           >
+             Log Out / Disconnect
+           </button>
+        </div>
+      )}
+      
       
     </header>
   );
