@@ -10,7 +10,7 @@ export default function Layout() {
       <Header />
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-auto p-4 sm:p-6 pt-[120px] sm:pt-[84px] pb-[84px] md:pb-[24px] w-full" style={{ background: 'var(--bg-primary)' }}>
+      <main className="flex-1 overflow-auto p-4 sm:p-6 pt-[140px] sm:pt-[84px] pb-[84px] md:pb-[24px] w-full" style={{ background: 'var(--bg-primary)' }}>
         <Outlet />
       </main>
     </div>
