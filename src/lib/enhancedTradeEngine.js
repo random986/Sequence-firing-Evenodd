@@ -870,7 +870,7 @@ class EnhancedTradeEngine {
       this.updateStatus('Executing');
       this._placeTrade('SINGLE', chosenDirection, this.config.baseStake);
     } else {
-      const dirs = ['EVEN', 'ODD', 'OVER5', 'UNDER5'];
+      const dirs = this.strategy === 'OU_WINNING' ? ['OVER5', 'UNDER5'] : ['EVEN', 'ODD'];
       let tradesPlaced = 0;
       this.updateStatus('Executing');
       dirs.forEach(dir => {
