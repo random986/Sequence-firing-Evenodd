@@ -765,6 +765,43 @@ class EnhancedTradeEngine {
     channel.contractId = null;
     if (channelKey === 'SINGLE') channel.direction = null;
 
+    // ═══ MARTINGALE for DUAL strategies (BOTH5 / BOTH / EO_WINNING / OU_WINNING) ═══
+    const isDualStrategy = this.strategy === 'BOTH5' || this.strategy === 'BOTH' ||
+                           this.strategy === 'OU_WINNING' || this.strategy === 'EO_WINNING';
+    if (isDualStrategy && channelKey !== 'SINGLE') {
+      const mult = (this.config.recoveryEnabled !== false) ? (this.config.martMultiplier || 2.0) : 1.0;
+      if (won) {
+        // Win: reset this channel's stake back to base
+        channel.step = 0;
+        channel.stake = this.config.baseStake;
+        this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Stake reset to $${this.config.baseStake.toFixed(2)}`);
+      } else {
+        // Loss: escalate this channel's stake by martingale multiplier
+        channel.step = (channel.step || 0) + 1;
+        const maxSteps = this.config.maxSteps || 6;
+        if (channel.step > maxSteps) channel.step = maxSteps;
+        channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
+        this.sendLog(`❌ [${channelKey}] LOSS — Next stake: $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
+      }
+
+      // ── Check if BOTH paired channels have settled → fire immediately ──
+      const dirs = (this.strategy === 'OU_WINNING' || this.strategy === 'BOTH5')
+        ? ['OVER5', 'UNDER5'] : ['EVEN', 'ODD'];
+      const bothSettled = dirs.every(d => !this.channels[d].active);
+
+      // Always record trade to history
+      if (this.onTradeUpdate) this.onTradeUpdate(trade);
+
+      if (bothSettled && this.running) {
+        // No cooldown for dual strategies — fire at next tick
+        this.nextAllowedTradeTime = 0;
+        this._scheduleNext(0);
+        return;
+      }
+      // Partner still settling — wait for it
+      return;
+    }
+
     if (this.onTradeUpdate) this.onTradeUpdate(trade);
 
     // Strategy-specific legacy recovery switches
@@ -887,14 +924,17 @@ class EnhancedTradeEngine {
       }
 
       this.updateStatus('Firing simultaneous trades...');
-      this.sendLog(`🔫 Firing SIMULTANEOUS trades: ${dirs[0]} + ${dirs[1]} @ $${this.config.baseStake.toFixed(2)} each`);
+      this.sendLog(`🔫 Firing SIMULTANEOUS trades: ${dirs[0]} ($${this.channels[dirs[0]].stake?.toFixed(2) || this.config.baseStake.toFixed(2)}) + ${dirs[1]} ($${this.channels[dirs[1]].stake?.toFixed(2) || this.config.baseStake.toFixed(2)})`);
 
-      // Build both payloads
+      // Build both payloads using per-channel martingale stake
       const payloads = dirs.map(dir => {
         const spec = CONTRACT_MAP[dir];
+        const ch = this.channels[dir];
+        // Use channel's martingale stake (falls back to baseStake on first trade)
+        const stake = ch.stake || this.config.baseStake;
         const payload = {
           buy: 1,
-          price: this.config.baseStake,
+          price: stake,
           parameters: {
             contract_type: spec.contract_type,
             underlying_symbol: this.activeMarket,
@@ -902,20 +942,21 @@ class EnhancedTradeEngine {
             duration_unit: 't',
             currency: derivWS.accountInfo?.currency || 'USD',
             basis: 'stake',
-            amount: this.config.baseStake,
+            amount: stake,
           },
         };
         if (spec.barrier) payload.parameters.barrier = spec.barrier;
-        return { dir, payload, spec };
+        return { dir, payload, spec, stake };
       });
 
       // Mark channels active BEFORE sending
-      for (const { dir } of payloads) {
+      for (const { dir, stake } of payloads) {
         const ch = this.channels[dir];
         ch.active = true;
         ch.direction = dir;
-        ch.stake = this.config.baseStake;
         ch.placedAt = Date.now();
+        // Keep existing stake (martingale) — don't overwrite with baseStake
+        if (!ch.stake) ch.stake = stake;
       }
 
       // Send BOTH WebSocket messages synchronously in the same tick
