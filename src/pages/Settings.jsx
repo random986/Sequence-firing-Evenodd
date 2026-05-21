@@ -19,7 +19,7 @@ function SliderInput({ label, value, onChange, min, max, step, unit = '' }) {
             onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
             style={{
               width: 70, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
-              borderRadius: 6, color: '#fff', fontSize: 13, padding: '4px 8px', textAlign: 'right',
+              borderRadius: 6, color: 'var(--text-primary)', fontSize: 13, padding: '4px 8px', textAlign: 'right',
             }}
           />
           {unit && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{unit}</span>}
@@ -217,18 +217,21 @@ export default function Settings() {
             <SliderInput
               label="Stop Loss (Session Limit)" value={config.stopLoss} unit="USD"
               onChange={(v) => config.updateConfig({ stopLoss: v })}
-              min={1} max={500} step={1}
+              min={0} max={500} step={1}
             />
+            {config.stopLoss === 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>0 = No limit</div>}
             <SliderInput
               label="Take Profit (Session Target)" value={config.takeProfit} unit="USD"
               onChange={(v) => config.updateConfig({ takeProfit: v })}
-              min={1} max={500} step={1}
+              min={0} max={500} step={1}
             />
+            {config.takeProfit === 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>0 = No limit</div>}
             <SliderInput
-              label="Max Consecutive Losses" value={config.maxLossStreak} unit="Losses"
+              label="Max Consecutive Losses" value={config.maxLossStreak || 0} unit="Losses"
               onChange={(v) => config.updateConfig({ maxLossStreak: v })}
-              min={1} max={10} step={1}
+              min={0} max={10} step={1}
             />
+            {(config.maxLossStreak || 0) === 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>0 = No limit</div>}
           </div>
 
           {/* Theme Settings */}

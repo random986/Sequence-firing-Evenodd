@@ -18,11 +18,12 @@ const defaults = {
   martMultiplier: 2.0,
   recoveryEnabled: true,      // Martingale ON by default
   switchAfterLosses: 3,
-  stopLoss: 5,
-  takeProfit: 3,
+  stopLoss: 0,
+  takeProfit: 0,
+  maxLossStreak: 0,
   cooldownMs: 1000,            // 1 second between trades
   minConfidence: 65,           // don't trade below this signal strength
-  theme: 'light',              // 'light' or 'dark'
+  theme: 'dark',               // 'light' or 'dark'
   autoSwitchMarkets: true,     // Switch market after loss
 };
 

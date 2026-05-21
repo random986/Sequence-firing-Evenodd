@@ -10,6 +10,7 @@ import useAccountStore from './store/useAccountStore';
 import useConfigStore from './store/useConfigStore';
 import Preloader from './components/Preloader';
 import FloatingDisclaimer from './components/FloatingDisclaimer';
+import OnboardingGuide from './components/OnboardingGuide';
 
 // Helper to fetch account list using the new REST API
 const getAccountList = async (token) => {
@@ -154,6 +155,7 @@ export default function App() {
       {appReady && (
         <>
           <FloatingDisclaimer />
+          <OnboardingGuide />
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
