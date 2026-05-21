@@ -168,24 +168,24 @@ export default function Header() {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex flex-col sm:flex-row sm:items-center sm:justify-between px-2 sm:px-4" style={{
+    <header className="fixed top-0 left-0 right-0 z-50 flex flex-col sm:flex-row sm:items-center sm:justify-between px-2 sm:px-6" style={{
       background: 'var(--bg-secondary)',
       borderBottom: '1px solid var(--border)',
-      minHeight: 60
+      minHeight: 70
     }}>
       
       {/* Top Row: Logo & Account (Always visible, full width on mobile) */}
-      <div className="flex items-center justify-between w-full sm:w-auto h-[60px]">
+      <div className="flex items-center justify-between w-full sm:w-auto h-[70px]">
         
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
-            width: 32, height: 32, borderRadius: 8,
+            width: 40, height: 40, borderRadius: 8,
             overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
             <img src="/logo.png" alt="Derivprinter Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
-          <span className="font-display hidden md:block" style={{ fontSize: 18, fontWeight: 700 }}>Derivprinter</span>
+          <span className="font-display hidden md:block" style={{ fontSize: 20, fontWeight: 700 }}>Derivprinter</span>
         </div>
 
         {/* Right: Account & Dropdown (Moved here for mobile) */}
@@ -244,13 +244,13 @@ export default function Header() {
       </div>
 
       {/* Navigation (Row 2 on mobile, next to logo on desktop) */}
-      <nav className="flex items-center justify-between sm:justify-start gap-1 sm:gap-2 h-[50px] sm:h-[60px] w-full sm:w-auto overflow-x-auto sm:ml-4 border-t sm:border-none border-gray-200 dark:border-gray-800">
+      <nav className="flex items-center justify-between sm:justify-start gap-2 sm:gap-6 h-[60px] sm:h-[70px] w-full sm:w-auto overflow-x-auto sm:ml-8 border-t sm:border-none border-gray-200 dark:border-gray-800">
         {NAV.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             style={({ isActive }) => ({
-              display: 'flex', alignItems: 'center', gap: 6,
+              display: 'flex', alignItems: 'center', gap: 8,
               padding: '0 8px', height: '100%',
               color: isActive ? 'var(--cyan)' : 'var(--text-muted)',
               fontWeight: isActive ? 600 : 500,
@@ -261,14 +261,14 @@ export default function Header() {
             })}
             title={label}
           >
-            <Icon size={16} />
-            <span style={{ fontSize: 12 }}>{label}</span>
+            <Icon size={18} />
+            <span style={{ fontSize: 13 }}>{label}</span>
           </NavLink>
         ))}
       </nav>
 
       {/* Right: Account & Dropdown (Desktop Only) */}
-      <div className="hidden sm:flex items-center gap-4 h-[60px]">
+      <div className="hidden sm:flex items-center gap-6 h-[70px]">
         
         {/* Connection Status Dot (Desktop only) */}
         <div className="hidden md:block" style={{
@@ -480,7 +480,7 @@ export default function Header() {
 
       {/* Mobile Dropdown Popup Container */}
       {dropdownOpen && (
-        <div className="sm:hidden fixed top-[60px] left-0 right-0 z-50 bg-[#ffffff] shadow-lg rounded-b-xl border-t border-gray-200 overflow-hidden text-gray-800">
+        <div className="sm:hidden fixed top-[70px] left-0 right-0 z-50 bg-[#ffffff] shadow-lg rounded-b-xl border-t border-gray-200 overflow-hidden text-gray-800">
            {/* Tabs */}
            <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
              <button 
