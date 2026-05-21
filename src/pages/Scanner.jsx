@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import scanner, { MARKETS, MARKET_LABELS } from '../lib/marketScanner';
 import useConfigStore from '../store/useConfigStore';
 import useConnectionStore from '../store/useConnectionStore';
-import tradeEngine from '../lib/tradeEngine';
+import tradeEngine from '../lib/enhancedTradeEngine';
 
 export default function Scanner() {
   const [scores, setScores] = useState({});

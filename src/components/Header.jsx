@@ -140,10 +140,22 @@ export default function Header() {
     derivWS.onStatusChange = (newStatus) => {
       setStatus(newStatus);
       if (newStatus === 'authorized') {
-        MARKETS.forEach(sym => derivWS.subscribeTicks(sym));
-        derivWS.on('tick', (msg) => {
-          if (msg.tick) scanner.addTick(msg.tick.symbol, msg.tick.quote);
+        MARKETS.forEach(sym => {
+          derivWS.send({ ticks_history: sym, end: 'latest', count: 100, style: 'ticks' }).then(res => {
+            if (res.history && res.history.prices) {
+              res.history.prices.forEach(p => scanner.addTick(sym, p));
+            }
+          }).catch(err => console.error('History fetch error:', err));
+          derivWS.subscribeTicks(sym);
         });
+        
+        // Only register the tick handler once
+        if (!window.__tickHandlerRegistered) {
+          derivWS.on('tick', (msg) => {
+            if (msg.tick) scanner.addTick(msg.tick.symbol, msg.tick.quote);
+          });
+          window.__tickHandlerRegistered = true;
+        }
       }
     };
     derivWS.onAccountUpdate = (info) => {
@@ -161,6 +173,7 @@ export default function Header() {
     setTopupLoading(true);
     try {
       await derivWS.send({ topup_virtual: 1 });
+      await derivWS.send({ balance: 1 });
     } catch (e) {
       console.error(e);
     }
@@ -173,13 +186,12 @@ export default function Header() {
       display: 'flex', flexDirection: 'column',
       background: 'var(--bg-secondary)',
       borderBottom: '1px solid var(--border)',
-      padding: '0 16px',
     }}>
       
       {/* Row 1: Logo + Account Info */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        width: '100%', height: 70, 
+        width: '100%', maxWidth: 1600, margin: '0 auto', padding: '0 16px', height: 70, 
       }}>
         
         {/* Logo */}
@@ -382,7 +394,7 @@ export default function Header() {
       {/* Row 2: Navigation */}
       <nav style={{
         display: 'flex', alignItems: 'center', gap: 4,
-        height: 50, width: '100%', overflowX: 'auto',
+        height: 50, width: '100%', maxWidth: 1600, margin: '0 auto', padding: '0 16px', overflowX: 'auto',
         borderTop: '1px solid var(--border)',
       }}>
         {NAV.map(({ to, icon: Icon, label }) => (

@@ -583,9 +583,11 @@ class EnhancedTradeEngine {
     const spec = CONTRACT_MAP[direction];
     if (!spec) return;
 
+    const cleanStake = Number(Number(stake).toFixed(2));
+
     const payload = {
       buy: 1,
-      price: stake,
+      price: cleanStake,
       parameters: {
         contract_type: spec.contract_type,
         symbol: this.activeMarket,
@@ -593,11 +595,11 @@ class EnhancedTradeEngine {
         duration_unit: 't',
         currency: derivWS.accountInfo?.currency || 'USD',
         basis: 'stake',
-        amount: stake,
+        amount: cleanStake,
       },
     };
-    if (dynamicBarrier) payload.parameters.barrier = dynamicBarrier;
-    else if (spec.barrier) payload.parameters.barrier = spec.barrier;
+    if (dynamicBarrier !== null && dynamicBarrier !== undefined) payload.parameters.barrier = String(dynamicBarrier);
+    else if (spec.barrier !== null && spec.barrier !== undefined) payload.parameters.barrier = String(spec.barrier);
 
     const channel = this.channels[channelKey];
     channel.active = true;
@@ -620,7 +622,17 @@ class EnhancedTradeEngine {
         this.sendLog(`❌ Trade error [${direction}]: ${res.error.message}`);
         channel.active = false;
         channel.direction = null;
-        this.stop(`Trade failed: ${res.error.message}`);
+        
+        // Don't stop entirely, just try to rotate market and resume after a delay
+        if (this.config.autoSwitchMarkets !== false) {
+          this.sendLog(`Rotating market due to trade error...`);
+          if (this.strategy === 'MATCHES' || this.strategy === 'MATCH_DIFF') {
+            this._switchMarket(direction);
+          } else {
+            this._switchMarketLegacy(direction);
+          }
+        }
+        if (this.running) this._scheduleNext(5000);
         return;
       }
       if (res.buy) {
@@ -647,10 +659,11 @@ class EnhancedTradeEngine {
           copyTradeEngine.copyTrade({
             contractType: spec.contract_type,
             symbol: this.activeMarket,
-            amount: stake,
+            amount: cleanStake,
             duration: 1,
             durationUnit: 't',
-            barrier: dynamicBarrier || spec.barrier
+            barrier: dynamicBarrier !== null && dynamicBarrier !== undefined ? String(dynamicBarrier) : (spec.barrier !== null && spec.barrier !== undefined ? String(spec.barrier) : undefined),
+            currency: derivWS.accountInfo?.currency || 'USD'
           });
         }
       }
@@ -944,20 +957,40 @@ class EnhancedTradeEngine {
         return;
       }
 
-      // Even/Odd or other legacy
+      // Even/Odd or Over/Under 5
       const minConf = this.config.minConfidence || 65;
-      const evenPct = parseFloat(scores.evenPct) || 0;
-      const oddPct = parseFloat(scores.oddPct) || 0;
+      
+      let dominantPct, dominantDir, weakerDir;
+      
+      if (this.strategy === 'BOTH5') {
+        const overPct = parseFloat(scores.overPct) || 0;
+        const underPct = parseFloat(scores.underPct) || 0;
+        dominantPct = Math.max(overPct, underPct);
+        dominantDir = overPct > underPct ? 'OVER5' : 'UNDER5';
+        weakerDir = overPct > underPct ? 'UNDER5' : 'OVER5';
+      } else {
+        const evenPct = parseFloat(scores.evenPct) || 0;
+        const oddPct = parseFloat(scores.oddPct) || 0;
+        dominantPct = Math.max(evenPct, oddPct);
+        dominantDir = evenPct > oddPct ? 'EVEN' : 'ODD';
+        weakerDir = evenPct > oddPct ? 'ODD' : 'EVEN';
+      }
 
-      let chosenDirection = null;
-      let dominantPct = Math.max(evenPct, oddPct);
-      let dominantDir = evenPct > oddPct ? 'EVEN' : 'ODD';
-      let weakerDir = evenPct > oddPct ? 'ODD' : 'EVEN';
-
-      chosenDirection = this.config.tradeLogic === 'momentum' ? dominantDir : weakerDir;
+      let chosenDirection = this.config.tradeLogic === 'momentum' ? dominantDir : weakerDir;
 
       if (dominantPct < minConf) {
-        this.updateStatus(`Waiting for signal strength (${dominantPct.toFixed(0)}% < ${minConf}%)`);
+        if (this.config.autoSwitchMarkets !== false) {
+          const ranked = scanner.getRanked(this.strategy);
+          const best = ranked[0];
+          // Try to switch to the best market if its score is better, or just pick the absolute best
+          if (best && best.symbol !== this.activeMarket) {
+            this.sendLog(`Confidence ${dominantPct.toFixed(0)}% < ${minConf}%. Auto-switching to best market: ${best.label}...`);
+            this.activeMarket = best.symbol;
+            if (this.onMarketSwitch) this.onMarketSwitch(this.activeMarket);
+          }
+        } else {
+          this.updateStatus(`Waiting for signal strength (${dominantPct.toFixed(0)}% < ${minConf}%)`);
+        }
         this._scheduleNext(1000);
         return;
       }
@@ -988,21 +1021,19 @@ class EnhancedTradeEngine {
         const ch = this.channels[dir];
         // Use channel's martingale stake (falls back to baseStake on first trade)
         const stake = ch.stake || this.config.baseStake;
+        const cleanStake = Number(Number(stake).toFixed(2));
         const payload = {
-          buy: 1,
-          price: stake,
-          parameters: {
-            contract_type: spec.contract_type,
-            symbol: this.activeMarket,
-            duration: 1,
-            duration_unit: 't',
-            currency: derivWS.accountInfo?.currency || 'USD',
-            basis: 'stake',
-            amount: stake,
-          },
+          proposal: 1,
+          amount: cleanStake,
+          basis: 'stake',
+          contract_type: spec.contract_type,
+          currency: derivWS.accountInfo?.currency || 'USD',
+          duration: 1,
+          duration_unit: 't',
+          symbol: this.activeMarket,
         };
-        if (spec.barrier) payload.parameters.barrier = spec.barrier;
-        return { dir, payload, spec, stake };
+        if (spec.barrier !== null && spec.barrier !== undefined) payload.barrier = String(spec.barrier);
+        return { dir, payload, spec, stake: cleanStake };
       });
 
       // Mark channels active BEFORE sending
@@ -1015,17 +1046,40 @@ class EnhancedTradeEngine {
         if (!ch.stake) ch.stake = stake;
       }
 
-      // Send BOTH WebSocket messages synchronously in the same tick
-      const promises = payloads.map(({ dir, payload, spec }) => {
-        return derivWS.send(payload).then(res => {
-          const ch = this.channels[dir];
+      // Send proposals and execute buys
+      const promises = payloads.map(async ({ dir, payload, spec, stake }) => {
+        const ch = this.channels[dir];
+        try {
+          // Step 1: Request Proposal
+          const propRes = await derivWS.send(payload);
+          if (propRes.error) {
+            this.sendLog(`❌ Proposal error [${dir}]: ${propRes.error.message}`);
+            ch.active = false;
+            ch.direction = null;
+            return propRes;
+          }
+
+          if (!propRes.proposal || !propRes.proposal.id) {
+            this.sendLog(`❌ No proposal ID returned [${dir}]`);
+            ch.active = false;
+            ch.direction = null;
+            return propRes;
+          }
+
+          // Step 2: Execute Buy
+          const buyPayload = {
+            buy: propRes.proposal.id,
+            price: propRes.proposal.ask_price
+          };
+
+          const res = await derivWS.send(buyPayload);
           if (res.error) {
             this.sendLog(`❌ Trade error [${dir}]: ${res.error.message}`);
             ch.active = false;
             ch.direction = null;
           } else if (res.buy) {
             ch.contractId = res.buy.contract_id;
-            this.sendLog(`✅ Triggered ${dir} at $${this.config.baseStake.toFixed(2)} | Contract: ${ch.contractId}`);
+            this.sendLog(`✅ Triggered ${dir} at $${stake.toFixed(2)} | Contract: ${ch.contractId}`);
             derivWS.sendRaw({ proposal_open_contract: 1, contract_id: ch.contractId, subscribe: 1 });
 
             if (this.onTradeUpdate) {
@@ -1033,7 +1087,7 @@ class EnhancedTradeEngine {
                 id: ch.contractId,
                 market: this.activeMarket,
                 direction: ch.direction,
-                stake: ch.stake,
+                stake: stake,
                 profit: 0,
                 won: false,
                 time: Date.now(),
@@ -1047,19 +1101,21 @@ class EnhancedTradeEngine {
               copyTradeEngine.copyTrade({
                 contractType: spec.contract_type,
                 symbol: this.activeMarket,
-                amount: this.config.baseStake,
+                amount: propRes.proposal.ask_price,
                 duration: 1,
                 durationUnit: 't',
-                barrier: spec.barrier
+                barrier: spec.barrier !== null && spec.barrier !== undefined ? String(spec.barrier) : undefined,
+                currency: derivWS.accountInfo?.currency || 'USD'
               });
             }
           }
           return res;
-        }).catch(err => {
+        } catch (err) {
           this.sendLog(`⚠️ Trade send error [${dir}]: ${err.message}`);
-          this.channels[dir].active = false;
-          this.channels[dir].direction = null;
-        });
+          ch.active = false;
+          ch.direction = null;
+          return { error: err };
+        }
       });
 
       // Wait for both responses

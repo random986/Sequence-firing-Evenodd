@@ -146,7 +146,7 @@ class TradeEngine {
     const spec = CONTRACT_MAP[direction];
     if (!spec) return;
 
-    const numericStake = parseFloat(stake) || 0.35;
+    const numericStake = Number(Number(stake).toFixed(2)) || 0.35;
 
     const proposalPayload = {
       proposal: 1,
@@ -158,7 +158,7 @@ class TradeEngine {
       duration_unit: 't',
       symbol: this.activeMarket,
     };
-    if (spec.barrier) proposalPayload.barrier = spec.barrier;
+    if (spec.barrier !== null && spec.barrier !== undefined) proposalPayload.barrier = String(spec.barrier);
 
     const channel = this.channels[channelKey];
     channel.active = true;
@@ -206,12 +206,13 @@ class TradeEngine {
         // MIRROR TO DEMO IF COPYTRADE IS ACTIVE
         if (copyTradeEngine.active) {
           copyTradeEngine.copyTrade({
-            contractType: contractType,
+            contractType: spec.contract_type,
             symbol: this.activeMarket,
-            amount: buyPrice,
+            amount: propRes.proposal.ask_price,
             duration: 1,
             durationUnit: 't',
-            barrier: undefined // tradeEngine.js doesn't currently use barriers
+            barrier: spec.barrier !== null && spec.barrier !== undefined ? String(spec.barrier) : undefined,
+            currency: derivWS.accountInfo?.currency || 'USD'
           });
         }
       }

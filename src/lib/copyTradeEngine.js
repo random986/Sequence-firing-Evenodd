@@ -65,26 +65,29 @@ class CopyTradeEngine {
   }
 
   /* ── Mirror a trade to the target account ── */
-  async copyTrade({ contractType, symbol, amount, duration, durationUnit, barrier }) {
+  async copyTrade({ contractType, symbol, amount, duration, durationUnit, barrier, currency = 'USD' }) {
     if (!this.active || this.status !== 'authorized') {
       this._log('⚠️ Cannot copy — target WS not authorized.');
       return;
     }
 
+    const cleanAmount = Number(Number(amount).toFixed(2));
+
     const proposal = {
       buy: 1,
       subscribe: 1,
-      price: amount,
+      price: cleanAmount,
       parameters: {
         contract_type: contractType,
         symbol: symbol,
-        amount: amount,
+        amount: cleanAmount,
         basis: 'stake',
         duration: duration,
         duration_unit: durationUnit,
+        currency: currency,
       }
     };
-    if (barrier) proposal.parameters.barrier = barrier;
+    if (barrier !== null && barrier !== undefined) proposal.parameters.barrier = String(barrier);
 
     const dirLabel = this.direction === 'demo_to_real' ? 'Demo→Real' : 'Real→Demo';
     this._log(`📋 [${dirLabel}] Copying → ${contractType} on ${symbol} @ $${amount}`);
