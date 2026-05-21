@@ -79,7 +79,7 @@ class CopyTradeEngine {
       basis: 'stake',
       contract_type: contractType,
       currency: currency,
-      symbol: symbol,
+      underlying_symbol: symbol,
       duration: duration,
       duration_unit: durationUnit
     };

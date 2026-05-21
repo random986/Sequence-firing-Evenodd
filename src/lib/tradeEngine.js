@@ -156,7 +156,7 @@ class TradeEngine {
       currency: derivWS.accountInfo?.currency || 'USD',
       duration: 1,
       duration_unit: 't',
-      symbol: this.activeMarket,
+      underlying_symbol: this.activeMarket,
     };
     if (spec.barrier !== null && spec.barrier !== undefined) proposalPayload.barrier = String(spec.barrier);
 
