@@ -792,44 +792,45 @@ class EnhancedTradeEngine {
     channel.contractId = null;
     if (channelKey === 'SINGLE') channel.direction = null;
 
-    // ═══ MARTINGALE & ANTI-MARTINGALE for DUAL strategies (BOTH5 / BOTH / EO_WINNING / OU_WINNING) ═══
+    // ═══ MARTINGALE & ANTI-MARTINGALE for ALL STRATEGIES ═══
+    if (won) {
+      channel.consecutiveLosses = 0;
+      if (this.config.antiMartEnabled) {
+        // Anti-Martingale: escalate on WIN
+        const mult = this.config.antiMartMultiplier || 2.0;
+        channel.step = (channel.step || 0) + 1;
+        const maxSteps = this.config.maxSteps || 6;
+        if (channel.step > maxSteps) channel.step = maxSteps;
+        channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
+        this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Anti-Martingale: Next stake $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
+      } else {
+        // Normal: reset on WIN
+        channel.step = 0;
+        channel.stake = this.config.baseStake;
+        this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Stake reset to $${this.config.baseStake.toFixed(2)}`);
+      }
+    } else {
+      channel.consecutiveLosses = (channel.consecutiveLosses || 0) + 1;
+      if (this.config.antiMartEnabled) {
+        // Anti-Martingale: reset on LOSS
+        channel.step = 0;
+        channel.stake = this.config.baseStake;
+        this.sendLog(`❌ [${channelKey}] LOSS — Anti-Martingale: Stake reset to $${this.config.baseStake.toFixed(2)}`);
+      } else {
+        // Normal Martingale: escalate on LOSS
+        const mult = (this.config.recoveryEnabled !== false) ? (this.config.martMultiplier || 2.0) : 1.0;
+        channel.step = (channel.step || 0) + 1;
+        const maxSteps = this.config.maxSteps || 6;
+        if (channel.step > maxSteps) channel.step = maxSteps;
+        channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
+        this.sendLog(`❌ [${channelKey}] LOSS — Next stake: $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
+      }
+    }
+
     const isDualStrategy = this.strategy === 'BOTH5' || this.strategy === 'BOTH' ||
                            this.strategy === 'OU_WINNING' || this.strategy === 'EO_WINNING';
-    if (isDualStrategy && channelKey !== 'SINGLE') {
-      if (won) {
-        channel.consecutiveLosses = 0;
-        if (this.config.antiMartEnabled) {
-          // Anti-Martingale: escalate on WIN
-          const mult = this.config.antiMartMultiplier || 2.0;
-          channel.step = (channel.step || 0) + 1;
-          const maxSteps = this.config.maxSteps || 6;
-          if (channel.step > maxSteps) channel.step = maxSteps;
-          channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
-          this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Anti-Martingale: Next stake $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
-        } else {
-          // Normal: reset on WIN
-          channel.step = 0;
-          channel.stake = this.config.baseStake;
-          this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Stake reset to $${this.config.baseStake.toFixed(2)}`);
-        }
-      } else {
-        channel.consecutiveLosses = (channel.consecutiveLosses || 0) + 1;
-        if (this.config.antiMartEnabled) {
-          // Anti-Martingale: reset on LOSS
-          channel.step = 0;
-          channel.stake = this.config.baseStake;
-          this.sendLog(`❌ [${channelKey}] LOSS — Anti-Martingale: Stake reset to $${this.config.baseStake.toFixed(2)}`);
-        } else {
-          // Normal Martingale: escalate on LOSS
-          const mult = (this.config.recoveryEnabled !== false) ? (this.config.martMultiplier || 2.0) : 1.0;
-          channel.step = (channel.step || 0) + 1;
-          const maxSteps = this.config.maxSteps || 6;
-          if (channel.step > maxSteps) channel.step = maxSteps;
-          channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
-          this.sendLog(`❌ [${channelKey}] LOSS — Next stake: $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
-        }
-      }
 
+    if (isDualStrategy && channelKey !== 'SINGLE') {
       // Auto Switch for dual strategies: if a channel hits 3 consecutive losses
       if (!won && channel.consecutiveLosses >= (this.config.switchAfterLosses || 3)) {
         if (this.config.autoSwitchMarkets !== false) {
@@ -939,7 +940,7 @@ class EnhancedTradeEngine {
         }
 
         this.updateStatus('Executing');
-        this._placeTrade('SINGLE', 'DIFF', this.config.baseStake, finalTarget.toString());
+        this._placeTrade('SINGLE', 'DIFF', this.channels.SINGLE.stake || this.config.baseStake, finalTarget.toString());
         return;
       }
 
@@ -962,7 +963,7 @@ class EnhancedTradeEngine {
       }
 
       this.updateStatus('Executing');
-      this._placeTrade('SINGLE', chosenDirection, this.config.baseStake);
+      this._placeTrade('SINGLE', chosenDirection, this.channels.SINGLE.stake || this.config.baseStake);
     } else {
       // ═══ SIMULTANEOUS DUAL TRADE FIRING ═══
       // Fire both trades in the EXACT same event loop tick

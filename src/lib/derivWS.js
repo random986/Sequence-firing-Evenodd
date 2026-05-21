@@ -23,7 +23,11 @@ class DerivWebSocket {
     this.onAccountUpdate = null;
   }
 
-  getAppId() {
+  getLegacyAppId() {
+    return '1089';
+  }
+
+  getNewAppId() {
     return '33h51PQlu5tsWflEmmoxW';
   }
 
@@ -43,7 +47,7 @@ class DerivWebSocket {
     this.status = 'connecting';
     this._emitStatus();
 
-    let wsUrl = `${WS_URL}?app_id=${this.getAppId()}`;
+    let wsUrl = `${WS_URL}?app_id=${this.getLegacyAppId()}`;
 
     if (this.token && this.accountId) {
       try {
@@ -51,7 +55,7 @@ class DerivWebSocket {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${this.token}`,
-            'Deriv-App-ID': this.getAppId()
+            'Deriv-App-ID': this.getNewAppId()
           }
         });
 
@@ -107,6 +111,15 @@ class DerivWebSocket {
             if (this.onAccountUpdate) this.onAccountUpdate(this.accountInfo);
           }
         }).catch(err => console.error('Balance subscribe failed:', err));
+
+        // Fetch user settings to get fullname
+        this.send({ get_settings: 1 }).then(settingsRes => {
+          if (settingsRes && settingsRes.get_settings) {
+            const s = settingsRes.get_settings;
+            this.accountInfo.fullname = [s.first_name, s.last_name].filter(Boolean).join(' ') || s.email || '';
+            if (this.onAccountUpdate) this.onAccountUpdate(this.accountInfo);
+          }
+        }).catch(err => console.error('Get settings failed:', err));
 
         // Re-subscribe to any active tick streams
         this.tickSubscriptions.forEach(sym => {

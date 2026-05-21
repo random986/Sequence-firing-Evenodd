@@ -6,7 +6,8 @@
    ══════════════════════════════════════════════════════════════ */
 
 const WS_URL = 'wss://ws.derivws.com/websockets/v3';
-const APP_ID = '33h51PQlu5tsWflEmmoxW';
+const LEGACY_APP_ID = '1089';
+const NEW_APP_ID = '33h51PQlu5tsWflEmmoxW';
 
 class CopyTradeEngine {
   constructor() {
@@ -124,7 +125,7 @@ class CopyTradeEngine {
     this._emitStatus();
     this._log('🔌 Connecting target WebSocket...');
 
-    let wsUrl = `${WS_URL}?app_id=${APP_ID}`;
+    let wsUrl = `${WS_URL}?app_id=${LEGACY_APP_ID}`;
 
     // Try OTP route
     if (this.targetToken && this.targetAccountId) {
@@ -133,7 +134,7 @@ class CopyTradeEngine {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${this.targetToken}`,
-            'Deriv-App-ID': APP_ID
+            'Deriv-App-ID': NEW_APP_ID
           }
         });
         if (response.ok) {
@@ -154,7 +155,7 @@ class CopyTradeEngine {
       this._log('✅ Target WebSocket connected.');
       this.reconnectAttempts = 0;
 
-      if (wsUrl !== `${WS_URL}?app_id=${APP_ID}`) {
+      if (wsUrl !== `${WS_URL}?app_id=${LEGACY_APP_ID}`) {
         this.status = 'authorized';
         this._emitStatus();
         this._log('🔐 Target account authorized via OTP.');

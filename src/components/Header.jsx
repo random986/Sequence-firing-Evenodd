@@ -237,7 +237,7 @@ export default function Header() {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>
-                      {accountInfo?.loginid || (isDemoActive ? 'Demo' : 'Real')}
+                      {accountInfo?.fullname || accountInfo?.loginid || (isDemoActive ? 'Demo' : 'Real')}
                     </span>
                     <ChevronDown size={14} color="var(--text-primary)" />
                   </div>
@@ -265,19 +265,19 @@ export default function Header() {
             {dropdownOpen && (
               <div style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: 8,
-                width: 320, background: '#ffffff', borderRadius: 8,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.2)', overflow: 'hidden',
-                color: '#333333'
+                width: 320, background: 'var(--surface)', borderRadius: 8,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.5)', overflow: 'hidden',
+                color: 'var(--text-primary)', border: '1px solid var(--border)'
               }}>
                 {/* Tabs */}
-                <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
                   <button 
                     onClick={() => setActiveTab('real')}
                     style={{
                       flex: 1, padding: '12px 0', border: 'none', background: 'transparent',
                       fontWeight: 600, fontSize: 14, cursor: 'pointer',
                       borderBottom: activeTab === 'real' ? '2px solid var(--crimson)' : '2px solid transparent',
-                      color: activeTab === 'real' ? '#333' : '#999'
+                      color: activeTab === 'real' ? 'var(--text-primary)' : 'var(--text-muted)'
                     }}
                   >Real</button>
                   <button 
@@ -286,7 +286,7 @@ export default function Header() {
                       flex: 1, padding: '12px 0', border: 'none', background: 'transparent',
                       fontWeight: 600, fontSize: 14, cursor: 'pointer',
                       borderBottom: activeTab === 'demo' ? '2px solid var(--crimson)' : '2px solid transparent',
-                      color: activeTab === 'demo' ? '#333' : '#999'
+                      color: activeTab === 'demo' ? 'var(--text-primary)' : 'var(--text-muted)'
                     }}
                   >Demo</button>
                 </div>
@@ -307,8 +307,8 @@ export default function Header() {
                           style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                             padding: '14px', borderRadius: 8,
-                            background: isCurrent ? '#f3f4f6' : 'transparent',
-                            border: isCurrent ? '1px solid #e5e7eb' : '1px solid transparent',
+                            background: isCurrent ? 'var(--surface-hover)' : 'transparent',
+                            border: isCurrent ? '1px solid var(--border)' : '1px solid transparent',
                             cursor: isCurrent ? 'default' : 'pointer',
                           }}
                         >
@@ -320,10 +320,10 @@ export default function Header() {
                               {activeTab === 'demo' ? 'D' : 'R'}
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span style={{ fontSize: 14, fontWeight: 700 }}>
+                              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                                 {activeTab === 'demo' ? 'Demo' : 'Real'}
                               </span>
-                              <span style={{ fontSize: 11, color: '#6b7280' }}>{acc.loginid || 'No ID'}</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{acc.loginid || 'No ID'}</span>
                             </div>
                           </div>
                           
@@ -332,8 +332,8 @@ export default function Header() {
                               onClick={(e) => { e.stopPropagation(); handleTopup(); }}
                               disabled={topupLoading}
                               style={{
-                                padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: 4,
-                                background: '#fff', fontSize: 12, fontWeight: 600, cursor: topupLoading ? 'wait' : 'pointer'
+                                padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 4,
+                                background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, cursor: topupLoading ? 'wait' : 'pointer'
                               }}
                             >
                               {topupLoading ? 'Resetting...' : 'Reset balance'}
@@ -350,12 +350,12 @@ export default function Header() {
                   </div>
 
                   {/* Total Assets */}
-                  <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
+                  <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 14, fontWeight: 700 }}>Total assets</span>
                       <span style={{ fontSize: 14 }}>{totalAssets.toFixed(2)} USD</span>
                     </div>
-                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                       Total assets in your Deriv accounts.
                     </div>
                   </div>
@@ -366,7 +366,7 @@ export default function Header() {
                   style={{
                     width: '100%', padding: '12px 0', border: 'none', background: 'rgba(255, 68, 79, 0.05)',
                     fontWeight: 600, fontSize: 13, cursor: 'pointer',
-                    color: 'var(--crimson)', borderTop: '1px solid #e5e7eb',
+                    color: 'var(--crimson)', borderTop: '1px solid var(--border)',
                     transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
                   }}
                 >

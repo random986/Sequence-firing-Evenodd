@@ -86,7 +86,7 @@ export default function Settings() {
           
           {/* Strategy Selection */}
           <div className="glass" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Activity size={18} color="var(--cyan)" />
               Algorithmic Strategy
             </h2>
@@ -97,7 +97,7 @@ export default function Settings() {
                   flex: 1, padding: '16px', borderRadius: 8, cursor: 'pointer',
                   border: config.strategy === 'BOTH5' ? '2px solid var(--cyan)' : '1px solid var(--border)',
                   background: config.strategy === 'BOTH5' ? 'rgba(0, 229, 255, 0.05)' : 'transparent',
-                  color: config.strategy === 'BOTH5' ? '#fff' : 'var(--text-secondary)',
+                  color: config.strategy === 'BOTH5' ? 'var(--text-primary)' : 'var(--text-secondary)',
                   textAlign: 'left'
                 }}
               >
@@ -110,7 +110,7 @@ export default function Settings() {
                   flex: 1, padding: '16px', borderRadius: 8, cursor: 'pointer',
                   border: config.strategy === 'BOTH' ? '2px solid var(--cyan)' : '1px solid var(--border)',
                   background: config.strategy === 'BOTH' ? 'rgba(0, 229, 255, 0.05)' : 'transparent',
-                  color: config.strategy === 'BOTH' ? '#fff' : 'var(--text-secondary)',
+                  color: config.strategy === 'BOTH' ? 'var(--text-primary)' : 'var(--text-secondary)',
                   textAlign: 'left'
                 }}
               >
@@ -122,7 +122,7 @@ export default function Settings() {
 
           {/* Staking & Martingale */}
           <div className="glass" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
               <SlidersHorizontal size={18} color="var(--cyan)" />
               Staking Rules
             </h2>
@@ -211,6 +211,14 @@ export default function Settings() {
               </div>
             </div>
 
+            {config.autoSwitchMarkets && (
+              <SliderInput
+                label="Switch After Losses" value={config.switchAfterLosses} unit="losses"
+                onChange={(v) => config.updateConfig({ switchAfterLosses: v })}
+                min={1} max={10} step={1}
+              />
+            )}
+
             {config.recoveryEnabled && (
               <SliderInput
                 label="Martingale Multiplier" value={config.martMultiplier} unit="x"
@@ -245,7 +253,7 @@ export default function Settings() {
           
           {/* Risk Management */}
           <div className="glass" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Shield size={18} color="var(--amber)" />
               Risk Guardrails
             </h2>

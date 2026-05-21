@@ -53,7 +53,7 @@ export default function OnboardingGuide({ onComplete }) {
   const [fadeIn, setFadeIn] = useState(false);
 
   useEffect(() => {
-    const done = localStorage.getItem(ONBOARDING_KEY);
+    const done = sessionStorage.getItem(ONBOARDING_KEY);
     if (done !== 'true') {
       setVisible(true);
       setTimeout(() => setFadeIn(true), 50);
@@ -61,7 +61,7 @@ export default function OnboardingGuide({ onComplete }) {
   }, []);
 
   const handleComplete = () => {
-    localStorage.setItem(ONBOARDING_KEY, 'true');
+    sessionStorage.setItem(ONBOARDING_KEY, 'true');
     setFadeIn(false);
     setTimeout(() => {
       setVisible(false);

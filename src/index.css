@@ -10,6 +10,8 @@
   --bg-secondary: #f2f2f2;
   --bg-card: rgba(255, 255, 255, 0.85);
   --bg-card-hover: rgba(245, 245, 245, 0.95);
+  --surface: #ffffff;
+  --surface-hover: rgba(0, 0, 0, 0.04);
   --border: rgba(0, 0, 0, 0.08);
   --border-hover: rgba(0, 0, 0, 0.15);
   --text-primary: #111111;
@@ -31,6 +33,8 @@
   --bg-secondary: #0e0e0e;
   --bg-card: rgba(21, 23, 23, 0.85);
   --bg-card-hover: rgba(26, 28, 28, 0.95);
+  --surface: #1a1a1a;
+  --surface-hover: rgba(255, 255, 255, 0.06);
   --border: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.15);
   --text-primary: #ffffff;
