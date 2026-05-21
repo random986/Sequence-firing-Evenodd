@@ -60,13 +60,13 @@ class MarketScanner {
       .map(sym => ({ symbol: sym, label: MARKET_LABELS[sym], ...this.scores[sym] }))
       .sort((a, b) => {
         if (strategy === 'BOTH5') {
-          // Over/Under: highest overPct first (most digits >5)
-          return (parseFloat(b.overPct) || 0) - (parseFloat(a.overPct) || 0);
+          const maxA = Math.max(parseFloat(a.overPct) || 0, parseFloat(a.underPct) || 0);
+          const maxB = Math.max(parseFloat(b.overPct) || 0, parseFloat(b.underPct) || 0);
+          return maxB - maxA;
         }
-        // Even/Odd: most balanced split first (smallest |even - odd| difference)
-        const diffA = Math.abs((parseFloat(a.evenPct) || 50) - (parseFloat(a.oddPct) || 50));
-        const diffB = Math.abs((parseFloat(b.evenPct) || 50) - (parseFloat(b.oddPct) || 50));
-        return diffA - diffB;
+        const maxA = Math.max(parseFloat(a.evenPct) || 0, parseFloat(a.oddPct) || 0);
+        const maxB = Math.max(parseFloat(b.evenPct) || 0, parseFloat(b.oddPct) || 0);
+        return maxB - maxA;
       });
   }
 

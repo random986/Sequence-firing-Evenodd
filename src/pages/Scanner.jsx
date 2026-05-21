@@ -77,13 +77,13 @@ export default function Scanner() {
               .map(sym => ({ sym, s: scores[sym] || {} }))
               .sort((a, b) => {
                 if (tab === 'ou') {
-                  // Sort by highest Over% first (most digits >5)
-                  return (parseFloat(b.s.overPct) || 0) - (parseFloat(a.s.overPct) || 0);
+                  const maxA = Math.max(parseFloat(a.s.overPct) || 0, parseFloat(a.s.underPct) || 0);
+                  const maxB = Math.max(parseFloat(b.s.overPct) || 0, parseFloat(b.s.underPct) || 0);
+                  return maxB - maxA;
                 } else {
-                  // Sort by most balanced even/odd (smallest difference between even and odd)
-                  const diffA = Math.abs((parseFloat(a.s.evenPct) || 50) - (parseFloat(a.s.oddPct) || 50));
-                  const diffB = Math.abs((parseFloat(b.s.evenPct) || 50) - (parseFloat(b.s.oddPct) || 50));
-                  return diffA - diffB; // smallest diff first = most balanced
+                  const maxA = Math.max(parseFloat(a.s.evenPct) || 0, parseFloat(a.s.oddPct) || 0);
+                  const maxB = Math.max(parseFloat(b.s.evenPct) || 0, parseFloat(b.s.oddPct) || 0);
+                  return maxB - maxA;
                 }
               })
               .map(({ sym }) => {
