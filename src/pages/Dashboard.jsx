@@ -62,47 +62,35 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {/* Martingale Toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8, paddingRight: 8, borderRight: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Martingale:</span>
-              <button 
-                  onClick={() => config.updateConfig({ recoveryEnabled: !config.recoveryEnabled })}
-                  style={{
-                    width: 36, height: 20, borderRadius: 10,
-                    background: config.recoveryEnabled ? 'var(--cyan)' : 'var(--border)',
-                    border: 'none', position: 'relative', cursor: 'pointer',
-                    transition: 'background 0.2s'
-                  }}
-                >
-                  <div style={{
-                    width: 14, height: 14, borderRadius: '50%', background: '#fff',
-                    position: 'absolute', top: 3,
-                    left: config.recoveryEnabled ? 19 : 3,
-                    transition: 'left 0.2s',
-                  }} />
-              </button>
-            </div>
+            {/* Martingale Button */}
+            <button
+              onClick={() => config.updateConfig({ recoveryEnabled: !config.recoveryEnabled })}
+              style={{
+                background: config.recoveryEnabled ? 'var(--cyan)' : 'rgba(255,255,255,0.05)',
+                border: config.recoveryEnabled ? 'none' : '1px solid var(--border)',
+                color: config.recoveryEnabled ? '#000' : 'var(--text-muted)',
+                fontSize: 11, fontWeight: 700, padding: '4px 10px',
+                borderRadius: 4, cursor: 'pointer', transition: 'all 0.2s',
+                marginRight: 4
+              }}
+            >
+              MARTINGALE {config.recoveryEnabled ? 'ON' : 'OFF'}
+            </button>
 
-            {/* Anti-Martingale Toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8, paddingRight: 8, borderRight: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Anti-Mart:</span>
-              <button 
-                  onClick={() => config.updateConfig({ antiMartEnabled: !config.antiMartEnabled })}
-                  style={{
-                    width: 36, height: 20, borderRadius: 10,
-                    background: config.antiMartEnabled ? 'var(--amber)' : 'var(--border)',
-                    border: 'none', position: 'relative', cursor: 'pointer',
-                    transition: 'background 0.2s'
-                  }}
-                >
-                  <div style={{
-                    width: 14, height: 14, borderRadius: '50%', background: '#fff',
-                    position: 'absolute', top: 3,
-                    left: config.antiMartEnabled ? 19 : 3,
-                    transition: 'left 0.2s',
-                  }} />
-              </button>
-            </div>
+            {/* Anti-Martingale Button */}
+            <button
+              onClick={() => config.updateConfig({ antiMartEnabled: !config.antiMartEnabled })}
+              style={{
+                background: config.antiMartEnabled ? 'var(--amber)' : 'rgba(255,255,255,0.05)',
+                border: config.antiMartEnabled ? 'none' : '1px solid var(--border)',
+                color: config.antiMartEnabled ? '#000' : 'var(--text-muted)',
+                fontSize: 11, fontWeight: 700, padding: '4px 10px',
+                borderRadius: 4, cursor: 'pointer', transition: 'all 0.2s',
+                marginRight: 8
+              }}
+            >
+              ANTI-MART {config.antiMartEnabled ? 'ON' : 'OFF'}
+            </button>
             
             {/* Market Selection Dropdown */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8, paddingRight: 8, borderRight: '1px solid var(--border)' }}>

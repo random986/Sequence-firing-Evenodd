@@ -101,7 +101,7 @@ export default function Settings() {
                   textAlign: 'left'
                 }}
               >
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Over/Under 5</div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: config.strategy === 'BOTH5' ? 'var(--text-primary)' : 'inherit' }}>Over/Under 5</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Hedges &gt;5 and &lt;5 digits simultaneously. Excludes 5.</div>
               </button>
               <button
@@ -114,7 +114,7 @@ export default function Settings() {
                   textAlign: 'left'
                 }}
               >
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Even/Odd</div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: config.strategy === 'BOTH' ? 'var(--text-primary)' : 'inherit' }}>Even/Odd</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Hedges Even and Odd digits simultaneously.</div>
               </button>
             </div>
@@ -136,7 +136,7 @@ export default function Settings() {
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div>
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Martingale Recovery</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>Martingale Recovery</span>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                     {config.recoveryEnabled ? 'Doubles stake after loss to recover' : 'Disabled — flat stake only'}
                   </div>
@@ -163,7 +163,7 @@ export default function Settings() {
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div>
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Anti-Martingale (Reverse)</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>Anti-Martingale (Reverse)</span>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                     {config.antiMartEnabled ? 'Increases stake after a WIN' : 'Disabled'}
                   </div>

@@ -79,7 +79,7 @@ export default function Copytrade() {
     flex: 1, padding: '14px 12px', borderRadius: 10, cursor: 'pointer',
     border: active ? '2px solid var(--cyan)' : '1px solid var(--border)',
     background: active ? 'rgba(255, 68, 79, 0.08)' : 'transparent',
-    color: active ? '#fff' : 'var(--text-secondary)',
+    color: active ? 'var(--crimson)' : 'var(--text-secondary)',
     textAlign: 'center', transition: 'all 0.2s',
     opacity: engineState.active ? 0.5 : 1,
     pointerEvents: engineState.active ? 'none' : 'auto',

@@ -194,7 +194,7 @@ export default function Header() {
         </div>
 
         {/* Right Side: Theme + Account */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginRight: 16 }}>
           
           {/* Connection Status Dot */}
           <div style={{
@@ -236,8 +236,9 @@ export default function Header() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>
-                      {accountInfo?.fullname || accountInfo?.loginid || (isDemoActive ? 'Demo' : 'Real')}
+                    <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
+                      {isDemoActive ? 'Demo - ' : 'Real - '}
+                      {accountInfo?.fullname || accountInfo?.loginid || ''}
                     </span>
                     <ChevronDown size={14} color="var(--text-primary)" />
                   </div>
