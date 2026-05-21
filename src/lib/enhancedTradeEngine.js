@@ -851,14 +851,9 @@ class EnhancedTradeEngine {
       }
     } else {
       channel.consecutiveLosses = (channel.consecutiveLosses || 0) + 1;
-      if (this.config.antiMartEnabled) {
-        // Anti-Martingale: reset on LOSS
-        channel.step = 0;
-        channel.stake = this.config.baseStake;
-        this.sendLog(`❌ [${channelKey}] LOSS — Anti-Martingale: Stake reset to $${this.config.baseStake.toFixed(2)}`);
-      } else {
+      if (this.config.recoveryEnabled !== false) {
         // Normal Martingale: escalate on LOSS
-        const mult = (this.config.recoveryEnabled !== false) ? (this.config.martMultiplier || 2.0) : 1.0;
+        const mult = this.config.martMultiplier || 2.0;
         channel.step = (channel.step || 0) + 1;
         const maxSteps = this.config.maxSteps || 6;
         if (channel.step > maxSteps) {
@@ -869,6 +864,11 @@ class EnhancedTradeEngine {
           channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
           this.sendLog(`❌ [${channelKey}] LOSS — Next stake: $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
         }
+      } else {
+        // Recovery Disabled: reset on LOSS
+        channel.step = 0;
+        channel.stake = this.config.baseStake;
+        this.sendLog(`❌ [${channelKey}] LOSS — Martingale Disabled: Stake reset to $${this.config.baseStake.toFixed(2)}`);
       }
     }
 

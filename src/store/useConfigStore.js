@@ -29,7 +29,7 @@ const defaults = {
   takeProfit: 0,
   maxLossStreak: 0,
   cooldownMs: 1000,            // 1 second between trades
-  minConfidence: 65,           // don't trade below this signal strength
+  minConfidence: 60,           // don't trade below this signal strength
   theme: 'dark',               // 'light' or 'dark'
   autoSwitchMarkets: true,     // Switch market after loss
 };
