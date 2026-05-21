@@ -786,7 +786,7 @@ class EnhancedTradeEngine {
       stake: buyPrice,
       profit,
       won,
-      exitTick: contract.current_spot_display_value || contract.exit_tick_display_value || contract.sell_spot_display_value || contract.current_spot || contract.sell_spot || '',
+      exitTick: contract.exit_tick_display_value || contract.sell_spot_display_value || contract.exit_tick || contract.sell_spot || contract.current_spot_display_value || contract.current_spot || '',
       barrier: contract.barrier || '',
       time: Date.now(),
       pending: false,
