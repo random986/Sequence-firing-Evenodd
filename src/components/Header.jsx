@@ -168,7 +168,7 @@ export default function Header() {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex flex-col sm:flex-row sm:items-center sm:justify-between px-2 sm:px-6" style={{
+    <header className="fixed top-0 left-0 right-0 z-50 flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 sm:px-10 md:px-16" style={{
       background: 'var(--bg-secondary)',
       borderBottom: '1px solid var(--border)',
       minHeight: 70
@@ -217,7 +217,8 @@ export default function Header() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   background: 'transparent', border: 'none', cursor: 'pointer',
-                  padding: '2px 4px'
+                  padding: '8px 12px', borderRadius: '8px',
+                  marginRight: '-8px'
                 }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -360,13 +361,7 @@ export default function Header() {
               {/* Tabs */}
               <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
                 <button 
-                  onClick={() => {
-                    setActiveTab('real');
-                    const firstReal = realAccounts[0];
-                    if (firstReal && activeAccountId !== firstReal.id) {
-                      handleConnect(firstReal);
-                    }
-                  }}
+                  onClick={() => setActiveTab('real')}
                   style={{
                     flex: 1, padding: '12px 0', border: 'none', background: 'transparent',
                     fontWeight: 600, fontSize: 14, cursor: 'pointer',
@@ -375,13 +370,7 @@ export default function Header() {
                   }}
                 >Real</button>
                 <button 
-                  onClick={() => {
-                    setActiveTab('demo');
-                    const firstDemo = demoAccounts[0];
-                    if (firstDemo && activeAccountId !== firstDemo.id) {
-                      handleConnect(firstDemo);
-                    }
-                  }}
+                  onClick={() => setActiveTab('demo')}
                   style={{
                     flex: 1, padding: '12px 0', border: 'none', background: 'transparent',
                     fontWeight: 600, fontSize: 14, cursor: 'pointer',
@@ -484,13 +473,7 @@ export default function Header() {
            {/* Tabs */}
            <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
              <button 
-               onClick={() => {
-                 setActiveTab('real');
-                 const firstReal = realAccounts[0];
-                 if (firstReal && activeAccountId !== firstReal.id) {
-                   handleConnect(firstReal);
-                 }
-               }}
+               onClick={() => setActiveTab('real')}
                style={{
                  flex: 1, padding: '12px 0', border: 'none', background: 'transparent',
                  fontWeight: 600, fontSize: 14, cursor: 'pointer',
@@ -499,13 +482,7 @@ export default function Header() {
                }}
              >Real</button>
              <button 
-               onClick={() => {
-                 setActiveTab('demo');
-                 const firstDemo = demoAccounts[0];
-                 if (firstDemo && activeAccountId !== firstDemo.id) {
-                   handleConnect(firstDemo);
-                 }
-               }}
+               onClick={() => setActiveTab('demo')}
                style={{
                  flex: 1, padding: '12px 0', border: 'none', background: 'transparent',
                  fontWeight: 600, fontSize: 14, cursor: 'pointer',
