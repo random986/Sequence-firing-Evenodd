@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Copy, RefreshCw, StopCircle, PlayCircle, AlertTriangle } from 'lucide-react';
+import { Copy, RefreshCw, StopCircle, PlayCircle, AlertTriangle, ArrowRight, ArrowLeftRight } from 'lucide-react';
 import useAccountStore from '../store/useAccountStore';
 import copyTradeEngine from '../lib/copyTradeEngine';
 
@@ -12,18 +12,28 @@ export default function Copytrade() {
 
   const activeAccount = accounts.find(a => a.id === activeAccountId);
   const isCurrentlyReal = activeAccount && !activeAccount.is_virtual;
+  const isCurrentlyDemo = activeAccount && activeAccount.is_virtual;
 
-  const [demoAccountId, setDemoAccountId] = useState(demoAccounts[0]?.id || '');
+  // Direction: 'demo_to_real' or 'real_to_demo'
+  const [direction, setDirection] = useState('demo_to_real');
+  const [targetAccountId, setTargetAccountId] = useState('');
   const [engineState, setEngineState] = useState(copyTradeEngine.getState());
   const [logs, setLogs] = useState([]);
 
+  // Set default target based on direction
   useEffect(() => {
-    // Poll state
+    if (direction === 'demo_to_real') {
+      setTargetAccountId(realAccounts[0]?.id || '');
+    } else {
+      setTargetAccountId(demoAccounts[0]?.id || '');
+    }
+  }, [direction, accounts.length]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       setEngineState(copyTradeEngine.getState());
     }, 1000);
 
-    // Bind log listener
     copyTradeEngine.onTradeLog = (msg) => {
       setLogs(prev => [...prev, { time: new Date(), msg }].slice(-50));
     };
@@ -34,30 +44,46 @@ export default function Copytrade() {
     };
   }, []);
 
+  const sourceIsCorrect = direction === 'demo_to_real' ? isCurrentlyDemo : isCurrentlyReal;
+  const sourceLabel = direction === 'demo_to_real' ? 'Demo' : 'Real';
+  const targetLabel = direction === 'demo_to_real' ? 'Real' : 'Demo';
+  const targetList = direction === 'demo_to_real' ? realAccounts : demoAccounts;
+
   const handleToggle = async () => {
     if (engineState.active) {
       copyTradeEngine.stop();
     } else {
-      if (!isCurrentlyReal) {
-        alert("You must be actively using a Real Account to copy trades to a Demo Account.");
+      if (!sourceIsCorrect) {
+        alert(`Please switch to a ${sourceLabel} account first to use ${sourceLabel}→${targetLabel} copying.`);
         return;
       }
-      if (!demoAccountId) {
-        alert("Please select a target Demo Account.");
+      if (!targetAccountId) {
+        alert(`Please select a target ${targetLabel} account.`);
         return;
       }
-      const demoAcc = accounts.find(a => a.id === demoAccountId);
-      if (!demoAcc) return;
+      const targetAcc = accounts.find(a => a.id === targetAccountId);
+      if (!targetAcc) return;
 
       copyTradeEngine.configure({
-        demoToken: demoAcc.token,
-        demoAccountId: demoAcc.loginid,
-        realAccountId: activeAccount.loginid
+        targetToken: targetAcc.token,
+        targetAccountId: targetAcc.loginid,
+        sourceAccountId: activeAccount.loginid,
+        direction: direction
       });
       await copyTradeEngine.start();
     }
     setEngineState(copyTradeEngine.getState());
   };
+
+  const dirBtnStyle = (active) => ({
+    flex: 1, padding: '14px 12px', borderRadius: 10, cursor: 'pointer',
+    border: active ? '2px solid var(--cyan)' : '1px solid var(--border)',
+    background: active ? 'rgba(255, 68, 79, 0.08)' : 'transparent',
+    color: active ? '#fff' : 'var(--text-secondary)',
+    textAlign: 'center', transition: 'all 0.2s',
+    opacity: engineState.active ? 0.5 : 1,
+    pointerEvents: engineState.active ? 'none' : 'auto',
+  });
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -67,65 +93,90 @@ export default function Copytrade() {
       </div>
 
       <div style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        borderRadius: 12,
-        padding: 24,
-        marginBottom: 32
+        background: 'var(--bg-card)', border: '1px solid var(--border)',
+        borderRadius: 12, padding: 24, marginBottom: 32
       }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <AlertTriangle size={18} color="var(--amber)" />
-          Real-to-Demo Replication
+        {/* Direction Selector */}
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ArrowLeftRight size={18} color="var(--amber)" />
+          Copy Direction
         </h2>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.6 }}>
-          The Copytrade engine intercepts trades placed on your primary Real account and replicates them onto a secondary Demo account in real-time. You must be connected to a Real account to initiate this.
-        </p>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+          <button onClick={() => setDirection('demo_to_real')} style={dirBtnStyle(direction === 'demo_to_real')}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Demo → Real</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Copy trades from Demo to Real account</div>
+          </button>
+          <button onClick={() => setDirection('real_to_demo')} style={dirBtnStyle(direction === 'real_to_demo')}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Real → Demo</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Copy trades from Real to Demo account</div>
+          </button>
+        </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+        {/* Source & Target */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 16, alignItems: 'center', marginBottom: 32 }}>
           {/* Source Account */}
           <div style={{ background: 'var(--bg-primary)', padding: 16, borderRadius: 8, border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 8, letterSpacing: '0.5px' }}>Primary (Source)</span>
-            {isCurrentlyReal ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 8, letterSpacing: '0.5px' }}>Source ({sourceLabel})</span>
+            {sourceIsCorrect ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)' }} />
-                <span className="font-data" style={{ fontWeight: 700, fontSize: 15 }}>{activeAccount.loginid}</span>
-                <span style={{ fontSize: 11, padding: '4px 8px', background: 'rgba(0,230,118,0.1)', color: 'var(--success)', borderRadius: 4, fontWeight: 600 }}>Real</span>
+                <span className="font-data" style={{ fontWeight: 700, fontSize: 14 }}>{activeAccount.loginid}</span>
+                <span style={{
+                  fontSize: 10, padding: '3px 6px', borderRadius: 4, fontWeight: 600,
+                  background: isCurrentlyReal ? 'rgba(0,230,118,0.1)' : 'rgba(0,168,255,0.1)',
+                  color: isCurrentlyReal ? 'var(--success)' : 'var(--amber)',
+                }}>{sourceLabel}</span>
               </div>
             ) : (
-              <div style={{ color: 'var(--crimson)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <AlertTriangle size={14} /> Please switch to a Real account.
+              <div style={{ color: 'var(--crimson)', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <AlertTriangle size={14} /> Switch to {sourceLabel}
               </div>
             )}
           </div>
 
+          {/* Arrow */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ArrowRight size={24} color="var(--cyan)" />
+          </div>
+
           {/* Target Account */}
           <div style={{ background: 'var(--bg-primary)', padding: 16, borderRadius: 8, border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 8, letterSpacing: '0.5px' }}>Target (Destination)</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 8, letterSpacing: '0.5px' }}>Target ({targetLabel})</span>
             <select
-              value={demoAccountId}
-              onChange={(e) => setDemoAccountId(e.target.value)}
-              disabled={engineState.active || demoAccounts.length === 0}
+              value={targetAccountId}
+              onChange={(e) => setTargetAccountId(e.target.value)}
+              disabled={engineState.active || targetList.length === 0}
               className="font-data"
               style={{
-                width: '100%',
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-                padding: '8px 12px',
-                color: 'var(--text-primary)',
-                outline: 'none',
-                fontSize: 14
+                width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 4, padding: '8px 12px', color: 'var(--text-primary)',
+                outline: 'none', fontSize: 13
               }}
             >
-              {demoAccounts.length === 0 && <option value="">No Demo accounts found</option>}
-              {demoAccounts.map(a => (
+              {targetList.length === 0 && <option value="">No {targetLabel} accounts</option>}
+              {targetList.map(a => (
                 <option key={a.id} value={a.id}>{a.loginid} - {a.name}</option>
               ))}
             </select>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: 24 }}>
+        {/* Warning for Demo→Real */}
+        {direction === 'demo_to_real' && (
+          <div style={{
+            padding: '12px 16px', borderRadius: 8, marginBottom: 20,
+            background: 'rgba(255, 68, 79, 0.06)', border: '1px solid rgba(255, 68, 79, 0.2)',
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+          }}>
+            <AlertTriangle size={16} color="var(--crimson)" style={{ flexShrink: 0, marginTop: 2 }} />
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              <strong style={{ color: 'var(--crimson)' }}>Caution:</strong> Demo→Real will replicate trades onto your real money account. Ensure you understand the risks. Trades will use the same stake amount.
+            </div>
+          </div>
+        )}
+
+        {/* Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: 20, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
               width: 10, height: 10, borderRadius: '50%',
@@ -138,13 +189,13 @@ export default function Copytrade() {
 
           <button
             onClick={handleToggle}
-            disabled={!isCurrentlyReal && !engineState.active}
+            disabled={!sourceIsCorrect && !engineState.active}
             style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '12px 24px', borderRadius: 8, border: 'none',
               background: engineState.active ? 'var(--crimson)' : 'var(--amber)',
               color: '#000', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-              opacity: (!isCurrentlyReal && !engineState.active) ? 0.5 : 1,
+              opacity: (!sourceIsCorrect && !engineState.active) ? 0.5 : 1,
               transition: 'all 0.2s',
               boxShadow: engineState.active ? '0 4px 15px rgba(255,68,79,0.3)' : '0 4px 15px rgba(0,168,255,0.3)'
             }}
@@ -161,7 +212,7 @@ export default function Copytrade() {
       {/* Copytrade Logs */}
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border)',
-        borderRadius: 12, padding: 20, minHeight: 300, display: 'flex', flexDirection: 'column'
+        borderRadius: 12, padding: 20, minHeight: 250, display: 'flex', flexDirection: 'column'
       }}>
         <h3 style={{
           fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase',
@@ -170,14 +221,14 @@ export default function Copytrade() {
           <RefreshCw size={14} style={{ animation: engineState.active ? 'spin 2s linear infinite' : 'none', color: engineState.active ? 'var(--amber)' : 'inherit' }} />
           Replication Logs
         </h3>
-        <div className="font-data" style={{ flex: 1, overflowY: 'auto', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="font-data" style={{ flex: 1, overflowY: 'auto', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {logs.length === 0 ? (
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: 40, fontStyle: 'italic' }}>
               Engine idle. Start copying to see logs...
             </div>
           ) : (
             logs.map((log, i) => (
-              <div key={i} style={{ display: 'flex', gap: 12, color: 'var(--text-secondary)' }}>
+              <div key={i} style={{ display: 'flex', gap: 8, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
                 <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>[{log.time.toLocaleTimeString()}]</span>
                 <span style={{ color: log.msg.includes('❌') ? 'var(--crimson)' : log.msg.includes('✅') ? 'var(--success)' : 'inherit' }}>
                   {log.msg}

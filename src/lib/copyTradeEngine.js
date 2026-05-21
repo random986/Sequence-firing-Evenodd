@@ -1,7 +1,8 @@
 /* ══════════════════════════════════════════════════════════════
-   COPY TRADE ENGINE — Mirrors trades from Real → Demo account
-   Spawns a secondary WebSocket for the demo account and listens
-   for buy events on the primary connection to replicate them.
+   COPY TRADE ENGINE — Mirrors trades between accounts
+   Supports Real→Demo AND Demo→Real copying.
+   Spawns a secondary WebSocket for the target account and
+   replicates buy events from the source connection.
    ══════════════════════════════════════════════════════════════ */
 
 const WS_URL = 'wss://ws.derivws.com/websockets/v3';
@@ -11,9 +12,10 @@ class CopyTradeEngine {
   constructor() {
     this.ws = null;
     this.status = 'idle'; // idle | connecting | authorized | error
-    this.demoToken = null;
-    this.demoAccountId = null;
-    this.realAccountId = null;
+    this.targetToken = null;
+    this.targetAccountId = null;
+    this.sourceAccountId = null;
+    this.direction = 'demo_to_real'; // 'demo_to_real' or 'real_to_demo'
     this.active = false;
     this.copiedTrades = [];
     this.maxLog = 100;
@@ -26,25 +28,26 @@ class CopyTradeEngine {
     this.maxReconnect = 5;
   }
 
-  /* ── Configure with demo account details ── */
-  configure({ demoToken, demoAccountId, realAccountId }) {
-    this.demoToken = demoToken;
-    this.demoAccountId = demoAccountId;
-    this.realAccountId = realAccountId;
+  /* ── Configure with target account details ── */
+  configure({ targetToken, targetAccountId, sourceAccountId, direction }) {
+    this.targetToken = targetToken;
+    this.targetAccountId = targetAccountId;
+    this.sourceAccountId = sourceAccountId;
+    this.direction = direction || 'demo_to_real';
   }
 
-  /* ── Start: connect the demo WS ── */
+  /* ── Start: connect the target WS ── */
   async start() {
-    if (!this.demoToken || !this.demoAccountId) {
-      this._log('❌ No demo account configured. Please select a demo account.');
+    if (!this.targetToken || !this.targetAccountId) {
+      this._log('❌ No target account configured. Please select a target account.');
       return;
     }
     this.active = true;
     this.reconnectAttempts = 0;
-    await this._connectDemo();
+    await this._connectTarget();
   }
 
-  /* ── Stop: tear down the demo WS ── */
+  /* ── Stop: tear down the target WS ── */
   stop() {
     this.active = false;
     if (this.reconnectTimer) {
@@ -61,10 +64,10 @@ class CopyTradeEngine {
     this._log('⏹️ Copy trade stopped.');
   }
 
-  /* ── Mirror a trade from the real account ── */
+  /* ── Mirror a trade to the target account ── */
   async copyTrade({ contractType, symbol, amount, duration, durationUnit, barrier }) {
     if (!this.active || this.status !== 'authorized') {
-      this._log('⚠️ Cannot copy — demo WS not authorized.');
+      this._log('⚠️ Cannot copy — target WS not authorized.');
       return;
     }
 
@@ -83,7 +86,8 @@ class CopyTradeEngine {
     };
     if (barrier) proposal.parameters.barrier = barrier;
 
-    this._log(`📋 Copying trade → ${contractType} on ${symbol} @ $${amount}`);
+    const dirLabel = this.direction === 'demo_to_real' ? 'Demo→Real' : 'Real→Demo';
+    this._log(`📋 [${dirLabel}] Copying → ${contractType} on ${symbol} @ $${amount}`);
 
     try {
       const result = await this._send(proposal);
@@ -98,9 +102,9 @@ class CopyTradeEngine {
           symbol,
           amount,
           time: Date.now(),
-          status: 'open'
+          status: 'open',
+          direction: this.direction
         });
-        // Keep log bounded
         if (this.copiedTrades.length > this.maxLog) {
           this.copiedTrades = this.copiedTrades.slice(-this.maxLog);
         }
@@ -110,25 +114,25 @@ class CopyTradeEngine {
     }
   }
 
-  /* ── Internal: connect to demo WS via OTP ── */
-  async _connectDemo() {
+  /* ── Internal: connect to target WS via OTP ── */
+  async _connectTarget() {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
     }
 
     this.status = 'connecting';
     this._emitStatus();
-    this._log('🔌 Connecting demo WebSocket...');
+    this._log('🔌 Connecting target WebSocket...');
 
     let wsUrl = `${WS_URL}?app_id=${APP_ID}`;
 
     // Try OTP route
-    if (this.demoToken && this.demoAccountId) {
+    if (this.targetToken && this.targetAccountId) {
       try {
-        const response = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${this.demoAccountId}/otp`, {
+        const response = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${this.targetAccountId}/otp`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${this.demoToken}`,
+            'Authorization': `Bearer ${this.targetToken}`,
             'Deriv-App-ID': APP_ID
           }
         });
@@ -136,7 +140,7 @@ class CopyTradeEngine {
           const data = await response.json();
           if (data.otp_url) {
             wsUrl = data.otp_url;
-            this._log('🔑 OTP URL obtained for demo account.');
+            this._log('🔑 OTP URL obtained for target account.');
           }
         }
       } catch (err) {
@@ -147,17 +151,15 @@ class CopyTradeEngine {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      this._log('✅ Demo WebSocket connected.');
+      this._log('✅ Target WebSocket connected.');
       this.reconnectAttempts = 0;
 
-      // If connected via OTP, we're already authorized
       if (wsUrl !== `${WS_URL}?app_id=${APP_ID}`) {
         this.status = 'authorized';
         this._emitStatus();
-        this._log('🔐 Demo account authorized via OTP.');
-      } else if (this.demoToken) {
-        // Fallback: authorize via token
-        this.ws.send(JSON.stringify({ authorize: this.demoToken }));
+        this._log('🔐 Target account authorized via OTP.');
+      } else if (this.targetToken) {
+        this.ws.send(JSON.stringify({ authorize: this.targetToken }));
       }
     };
 
@@ -165,20 +167,18 @@ class CopyTradeEngine {
       try {
         const msg = JSON.parse(event.data);
 
-        // Handle authorize response
         if (msg.msg_type === 'authorize') {
           if (msg.error) {
-            this._log(`❌ Demo auth failed: ${msg.error.message}`);
+            this._log(`❌ Target auth failed: ${msg.error.message}`);
             this.status = 'error';
           } else {
             this.status = 'authorized';
-            this._log(`🔐 Demo authorized: ${msg.authorize?.loginid}`);
+            this._log(`🔐 Target authorized: ${msg.authorize?.loginid}`);
           }
           this._emitStatus();
           return;
         }
 
-        // Handle pending request responses
         if (msg.req_id && this.pendingRequests.has(msg.req_id)) {
           const { resolve } = this.pendingRequests.get(msg.req_id);
           this.pendingRequests.delete(msg.req_id);
@@ -190,37 +190,36 @@ class CopyTradeEngine {
     };
 
     this.ws.onerror = () => {
-      this._log('❌ Demo WebSocket error.');
+      this._log('❌ Target WebSocket error.');
       this.status = 'error';
       this._emitStatus();
     };
 
     this.ws.onclose = () => {
-      this._log('🔌 Demo WebSocket disconnected.');
+      this._log('🔌 Target WebSocket disconnected.');
       this.status = 'idle';
       this._emitStatus();
 
       if (this.active && this.reconnectAttempts < this.maxReconnect) {
         const delay = Math.min(2000 * Math.pow(2, this.reconnectAttempts), 30000);
         this.reconnectAttempts++;
-        this._log(`🔄 Reconnecting demo in ${(delay / 1000).toFixed(0)}s...`);
-        this.reconnectTimer = setTimeout(() => this._connectDemo(), delay);
+        this._log(`🔄 Reconnecting target in ${(delay / 1000).toFixed(0)}s...`);
+        this.reconnectTimer = setTimeout(() => this._connectTarget(), delay);
       }
     };
   }
 
-  /* ── Internal: send message on demo WS ── */
+  /* ── Internal: send message on target WS ── */
   _send(payload) {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        return reject(new Error('Demo WS not open'));
+        return reject(new Error('Target WS not open'));
       }
       const id = ++this.reqId;
       payload.req_id = id;
       this.pendingRequests.set(id, { resolve, reject });
       this.ws.send(JSON.stringify(payload));
 
-      // Timeout after 15s
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
@@ -247,8 +246,9 @@ class CopyTradeEngine {
       status: this.status,
       active: this.active,
       copiedTrades: this.copiedTrades,
-      demoAccountId: this.demoAccountId,
-      realAccountId: this.realAccountId
+      targetAccountId: this.targetAccountId,
+      sourceAccountId: this.sourceAccountId,
+      direction: this.direction
     };
   }
 }

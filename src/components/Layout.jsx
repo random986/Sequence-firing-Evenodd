@@ -15,7 +15,7 @@ export default function Layout() {
         overflow: 'auto',
         padding: '16px',
         paddingTop: '150px',
-        paddingBottom: '24px',
+        paddingBottom: '120px',
         background: 'var(--bg-primary)',
         width: '100%',
       }}>

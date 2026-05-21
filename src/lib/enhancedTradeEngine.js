@@ -388,6 +388,8 @@ class EnhancedTradeEngine {
       this._executeMatchesSniperCycle();
       return;
     }
+    // All other strategies (BOTH5, BOTH, OU_WINNING, EO_WINNING, DIFF, etc.)
+    this._executeLegacyCycle();
   }
 
   // --- MATCHES DIGIT SNIPER STRATEGY ---
@@ -870,20 +872,89 @@ class EnhancedTradeEngine {
       this.updateStatus('Executing');
       this._placeTrade('SINGLE', chosenDirection, this.config.baseStake);
     } else {
-      const dirs = this.strategy === 'OU_WINNING' ? ['OVER5', 'UNDER5'] : ['EVEN', 'ODD'];
-      let tradesPlaced = 0;
-      this.updateStatus('Executing');
-      dirs.forEach(dir => {
-        const channel = this.channels[dir];
-        if (!channel.active) {
-          this._placeTrade(dir, dir, this.config.baseStake);
-          tradesPlaced++;
-        }
+      // ═══ SIMULTANEOUS DUAL TRADE FIRING ═══
+      // Fire both trades in the EXACT same event loop tick
+      const dirs = this.strategy === 'OU_WINNING' || this.strategy === 'BOTH5'
+        ? ['OVER5', 'UNDER5']
+        : ['EVEN', 'ODD'];
+
+      // Check if any channel is still active (waiting for settlement)
+      const allFree = dirs.every(dir => !this.channels[dir].active);
+      if (!allFree) {
+        this.updateStatus('Polling settlement...');
+        this._scheduleNext(1500);
+        return;
+      }
+
+      this.updateStatus('Firing simultaneous trades...');
+      this.sendLog(`🔫 Firing SIMULTANEOUS trades: ${dirs[0]} + ${dirs[1]} @ $${this.config.baseStake.toFixed(2)} each`);
+
+      // Build both payloads
+      const payloads = dirs.map(dir => {
+        const spec = CONTRACT_MAP[dir];
+        const payload = {
+          buy: 1,
+          price: this.config.baseStake,
+          parameters: {
+            contract_type: spec.contract_type,
+            underlying_symbol: this.activeMarket,
+            duration: 1,
+            duration_unit: 't',
+            currency: derivWS.accountInfo?.currency || 'USD',
+            basis: 'stake',
+            amount: this.config.baseStake,
+          },
+        };
+        if (spec.barrier) payload.parameters.barrier = spec.barrier;
+        return { dir, payload, spec };
       });
 
-      if (tradesPlaced === 0) {
-        this._scheduleNext(1500);
+      // Mark channels active BEFORE sending
+      for (const { dir } of payloads) {
+        const ch = this.channels[dir];
+        ch.active = true;
+        ch.direction = dir;
+        ch.stake = this.config.baseStake;
+        ch.placedAt = Date.now();
       }
+
+      // Send BOTH WebSocket messages synchronously in the same tick
+      const promises = payloads.map(({ dir, payload, spec }) => {
+        return derivWS.send(payload).then(res => {
+          const ch = this.channels[dir];
+          if (res.error) {
+            this.sendLog(`❌ Trade error [${dir}]: ${res.error.message}`);
+            ch.active = false;
+            ch.direction = null;
+          } else if (res.buy) {
+            ch.contractId = res.buy.contract_id;
+            this.sendLog(`✅ Triggered ${dir} at $${this.config.baseStake.toFixed(2)} | Contract: ${ch.contractId}`);
+            derivWS.sendRaw({ proposal_open_contract: 1, contract_id: ch.contractId, subscribe: 1 });
+
+            // Copy trade if active
+            if (copyTradeEngine.active) {
+              copyTradeEngine.copyTrade({
+                contractType: spec.contract_type,
+                symbol: this.activeMarket,
+                amount: this.config.baseStake,
+                duration: 1,
+                durationUnit: 't',
+                barrier: spec.barrier
+              });
+            }
+          }
+          return res;
+        }).catch(err => {
+          this.sendLog(`⚠️ Trade send error [${dir}]: ${err.message}`);
+          this.channels[dir].active = false;
+          this.channels[dir].direction = null;
+        });
+      });
+
+      // Wait for both responses
+      Promise.all(promises).then(() => {
+        this.sendLog(`⚡ Both trades dispatched to same market tick.`);
+      });
     }
   }
 
