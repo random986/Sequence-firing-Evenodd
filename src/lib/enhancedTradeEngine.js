@@ -829,16 +829,18 @@ class EnhancedTradeEngine {
 
     // ═══ MARTINGALE & ANTI-MARTINGALE for ALL STRATEGIES ═══
     if (won) {
+      const wasRecovery = channel.consecutiveLosses > 0;
       channel.consecutiveLosses = 0;
-      if (this.config.antiMartEnabled) {
-        // Anti-Martingale: escalate on WIN
+
+      if (this.config.antiMartEnabled && !wasRecovery) {
+        // Anti-Martingale: escalate on WIN (only if not recovering from a loss)
         const mult = this.config.antiMartMultiplier || 2.0;
         channel.step = (channel.step || 0) + 1;
-        const maxSteps = this.config.maxSteps || 6;
+        const maxSteps = 3; // Hard limit for Anti-Martingale
         if (channel.step > maxSteps) {
           channel.step = 0;
           channel.stake = this.config.baseStake;
-          this.sendLog(`🎉 [${channelKey}] WIN $${profit.toFixed(2)} — Anti-Martingale Max Steps Reached! Profit Secured. Stake reset to $${this.config.baseStake.toFixed(2)}`);
+          this.sendLog(`🎉 [${channelKey}] WIN $${profit.toFixed(2)} — Anti-Martingale Max Steps (3) Reached! Profit Secured. Stake reset to $${this.config.baseStake.toFixed(2)}`);
         } else {
           channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
           this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Anti-Martingale: Next stake $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
@@ -847,7 +849,11 @@ class EnhancedTradeEngine {
         // Normal: reset on WIN
         channel.step = 0;
         channel.stake = this.config.baseStake;
-        this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Stake reset to $${this.config.baseStake.toFixed(2)}`);
+        if (wasRecovery && this.config.antiMartEnabled) {
+          this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Recovery successful! Stake reset to $${this.config.baseStake.toFixed(2)}`);
+        } else {
+          this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Stake reset to $${this.config.baseStake.toFixed(2)}`);
+        }
       }
     } else {
       channel.consecutiveLosses = (channel.consecutiveLosses || 0) + 1;
