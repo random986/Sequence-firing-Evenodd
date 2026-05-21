@@ -22,7 +22,7 @@ export default function BotControl() {
   const setBotRunning = useTradeStore(s => s.setBotRunning);
   const setStopReason = useTradeStore(s => s.setStopReason);
   const setActiveMarket = useConnectionStore(s => s.setActiveMarket);
-  const addTrade = useTradeStore(s => s.addTrade);
+  const addOrUpdateTrade = useTradeStore(s => s.addOrUpdateTrade);
   const resetSession = useTradeStore(s => s.resetSession);
 
   const handleToggle = useCallback(() => {
@@ -43,15 +43,17 @@ export default function BotControl() {
         maxSteps: config.maxSteps,
         martMultiplier: config.martMultiplier,
         recoveryEnabled: config.recoveryEnabled,
+        antiMartEnabled: config.antiMartEnabled,
+        antiMartMultiplier: config.antiMartMultiplier,
         switchAfterLosses: config.switchAfterLosses,
-        stopLoss: config.stopLoss,
-        takeProfit: config.takeProfit,
+        stopLoss: config.stopLoss || 0,
+        takeProfit: config.takeProfit || 0,
         cooldownMs: config.cooldownMs,
         minConfidence: config.minConfidence,
       });
       setBotRunning(true);
     }
-  }, [botRunning, status, config, setBotRunning, setStopReason, setActiveMarket, addTrade, resetSession]);
+  }, [botRunning, status, config, setBotRunning, setStopReason, setActiveMarket, addOrUpdateTrade, resetSession]);
 
   const canStart = status === 'authorized' && !botRunning;
 

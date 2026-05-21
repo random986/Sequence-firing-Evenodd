@@ -6,7 +6,12 @@ const STORAGE_KEY = 'derivprinter_config';
 function loadConfig() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.stopLoss === 3) parsed.stopLoss = 0;
+      if (parsed.takeProfit === 5) parsed.takeProfit = 0;
+      return parsed;
+    }
   } catch {}
   return null;
 }

@@ -1007,6 +1007,8 @@ class EnhancedTradeEngine {
             this.sendLog(`Confidence ${dominantPct.toFixed(0)}% < ${minConf}%. Auto-switching to best market: ${best.label}...`);
             this.activeMarket = best.symbol;
             if (this.onMarketSwitch) this.onMarketSwitch(this.activeMarket);
+          } else {
+            this.updateStatus(`Low signal (${dominantPct.toFixed(0)}% < ${minConf}%)`);
           }
         } else {
           this.updateStatus(`Waiting for signal strength (${dominantPct.toFixed(0)}% < ${minConf}%)`);
