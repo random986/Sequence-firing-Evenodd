@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import useTradeStore from '../store/useTradeStore';
 import useConnectionStore from '../store/useConnectionStore';
 import useConfigStore from '../store/useConfigStore';
-import tradeEngine from '../lib/tradeEngine';
+import tradeEngine from '../lib/enhancedTradeEngine';
 import derivWS from '../lib/derivWS';
 import { MARKET_LABELS } from '../lib/marketScanner';
 import useAccountStore from '../store/useAccountStore';
