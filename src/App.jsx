@@ -11,6 +11,7 @@ import useConfigStore from './store/useConfigStore';
 import Preloader from './components/Preloader';
 import FloatingDisclaimer from './components/FloatingDisclaimer';
 import OnboardingGuide from './components/OnboardingGuide';
+import { Toaster } from 'react-hot-toast';
 
 // Helper to fetch account list using the new REST API
 const getAccountList = async (token) => {
@@ -156,6 +157,13 @@ export default function App() {
         <>
           <FloatingDisclaimer />
           <OnboardingGuide />
+          <Toaster position="top-right" toastOptions={{
+            style: {
+              background: 'var(--bg-card)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border)',
+            }
+          }} />
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }

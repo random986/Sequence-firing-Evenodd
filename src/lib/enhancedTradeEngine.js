@@ -8,6 +8,7 @@ import derivWS from './derivWS.js';
 import scanner, { MARKETS, MARKET_LABELS } from './marketScanner.js';
 import riskManager from './riskManager.js';
 import copyTradeEngine from './copyTradeEngine.js';
+import toast from 'react-hot-toast';
 
 const CONTRACT_MAP = {
   OVER5:  { contract_type: 'DIGITOVER',  barrier: '5' },
@@ -788,6 +789,7 @@ class EnhancedTradeEngine {
       exitTick: contract.current_spot_display_value || contract.exit_tick_display_value || contract.sell_spot_display_value || contract.current_spot || contract.sell_spot || '',
       barrier: contract.barrier || '',
       time: Date.now(),
+      pending: false,
     };
 
     this.sessionTrades.push(trade);
@@ -1005,13 +1007,22 @@ class EnhancedTradeEngine {
           // Try to switch to the best market if its score is better, or just pick the absolute best
           if (best && best.symbol !== this.activeMarket) {
             this.sendLog(`Confidence ${dominantPct.toFixed(0)}% < ${minConf}%. Auto-switching to best market: ${best.label}...`);
+            toast(`Low Signal. Switching to ${best.label}`, { icon: '🔄', id: 'market-switch' });
             this.activeMarket = best.symbol;
             if (this.onMarketSwitch) this.onMarketSwitch(this.activeMarket);
           } else {
             this.updateStatus(`Low signal (${dominantPct.toFixed(0)}% < ${minConf}%)`);
+            if (!this._lastLowSignalToast || Date.now() - this._lastLowSignalToast > 10000) {
+              toast(`Signal strength low (${dominantPct.toFixed(0)}%), waiting...`, { icon: '⏳', id: 'low-signal' });
+              this._lastLowSignalToast = Date.now();
+            }
           }
         } else {
           this.updateStatus(`Waiting for signal strength (${dominantPct.toFixed(0)}% < ${minConf}%)`);
+          if (!this._lastLowSignalToast || Date.now() - this._lastLowSignalToast > 10000) {
+            toast(`Signal strength low (${dominantPct.toFixed(0)}%), waiting...`, { icon: '⏳', id: 'low-signal' });
+            this._lastLowSignalToast = Date.now();
+          }
         }
         this._scheduleNext(1000);
         return;

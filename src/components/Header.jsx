@@ -200,7 +200,7 @@ export default function Header() {
             width: 40, height: 40, borderRadius: 8,
             overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
-            <img src="/logo.png" alt="Derivprinter Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <img src="./logo.png" alt="Derivprinter Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
           <span className="font-display" style={{ fontSize: 20, fontWeight: 700 }}>Derivprinter</span>
         </div>
@@ -248,11 +248,10 @@ export default function Header() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
-                      {isDemoActive ? 'Demo - ' : 'Real - '}
-                      {accountInfo?.fullname || accountInfo?.loginid || ''}
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {isDemoActive ? 'Demo' : 'Real'}
                     </span>
-                    <ChevronDown size={14} color="var(--text-primary)" />
+                    <ChevronDown size={14} color="var(--text-muted)" />
                   </div>
                   <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--cyan)' }}>
                     {accountInfo?.balance ? accountInfo.balance.toFixed(2) : '0.00'} {accountInfo?.currency || 'USD'}

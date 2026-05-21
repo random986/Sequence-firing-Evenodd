@@ -31,8 +31,9 @@ export default function Preloader({ onAccept }) {
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
       background: 'linear-gradient(145deg, #0a0a0a 0%, #141428 50%, #0a0a0a 100%)',
       zIndex: 99999,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: 24,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      padding: '40px 24px',
+      overflowY: 'auto',
       opacity: fadeOut ? 0 : 1,
       transition: 'opacity 0.5s ease-out'
     }}>
@@ -54,7 +55,7 @@ export default function Preloader({ onAccept }) {
         animation: 'preloaderPulse 2s ease-in-out infinite',
         boxShadow: '0 0 60px rgba(255, 68, 79, 0.3)'
       }}>
-        <img src="/logo.png" alt="Derivprinter Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        <img src="./logo.png" alt="Derivprinter Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
       </div>
 
       {/* Brand Name */}
