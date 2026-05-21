@@ -628,6 +628,20 @@ class EnhancedTradeEngine {
         this.sendLog(`✅ Triggered ${channelKey} ${direction} at $${stake.toFixed(2)} | Contract ID: ${channel.contractId}`);
         derivWS.sendRaw({ proposal_open_contract: 1, contract_id: channel.contractId, subscribe: 1 });
         
+        if (this.onTradeUpdate) {
+          this.onTradeUpdate({
+            id: channel.contractId,
+            market: this.activeMarket,
+            direction: direction,
+            stake: stake,
+            profit: 0,
+            won: false,
+            time: Date.now(),
+            exitTick: null,
+            pending: true
+          });
+        }
+        
         // MIRROR TO DEMO IF COPYTRADE IS ACTIVE
         if (copyTradeEngine.active) {
           copyTradeEngine.copyTrade({
@@ -1012,6 +1026,20 @@ class EnhancedTradeEngine {
             ch.contractId = res.buy.contract_id;
             this.sendLog(`✅ Triggered ${dir} at $${this.config.baseStake.toFixed(2)} | Contract: ${ch.contractId}`);
             derivWS.sendRaw({ proposal_open_contract: 1, contract_id: ch.contractId, subscribe: 1 });
+
+            if (this.onTradeUpdate) {
+              this.onTradeUpdate({
+                id: ch.contractId,
+                market: this.activeMarket,
+                direction: ch.direction,
+                stake: ch.stake,
+                profit: 0,
+                won: false,
+                time: Date.now(),
+                exitTick: null,
+                pending: true
+              });
+            }
 
             // Copy trade if active
             if (copyTradeEngine.active) {

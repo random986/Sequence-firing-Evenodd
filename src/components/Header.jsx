@@ -237,7 +237,7 @@ export default function Header() {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>
-                      {isDemoActive ? 'Demo' : 'Real'}
+                      {accountInfo?.loginid || (isDemoActive ? 'Demo' : 'Real')}
                     </span>
                     <ChevronDown size={14} color="var(--text-primary)" />
                   </div>

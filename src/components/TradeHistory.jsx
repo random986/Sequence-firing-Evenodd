@@ -122,15 +122,15 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
                   </td>
                   <td className="font-data text-right" style={{
                     padding: '12px 6px', fontSize: 13, fontWeight: 700,
-                    color: t.won ? 'var(--success)' : 'var(--crimson)',
+                    color: t.pending ? 'var(--text-muted)' : (t.won ? 'var(--success)' : 'var(--crimson)'),
                   }}>
-                    {t.won ? '+' : ''}{t.profit.toFixed(2)}
+                    {t.pending ? '...' : `${t.won ? '+' : ''}${t.profit.toFixed(2)}`}
                   </td>
                   <td className="font-data text-right" style={{
                     padding: '12px 6px', fontSize: 14, fontWeight: 800,
-                    color: t.won ? 'var(--success)' : 'var(--crimson)',
+                    color: t.pending ? 'var(--text-muted)' : (t.won ? 'var(--success)' : 'var(--crimson)'),
                   }}>
-                    {t.exitTick ? String(t.exitTick).slice(-1) : '-'}
+                    {t.pending ? '...' : (t.exitTick ? String(t.exitTick).slice(-1) : '-')}
                   </td>
                 </tr>
               ))}

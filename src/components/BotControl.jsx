@@ -33,7 +33,7 @@ export default function BotControl() {
       if (status !== 'authorized') return;
       resetSession();
 
-      tradeEngine.onTradeUpdate = (trade) => addTrade(trade);
+      tradeEngine.onTradeUpdate = (trade) => addOrUpdateTrade(trade);
       tradeEngine.onBotStop = (reason) => { setStopReason(reason); };
       tradeEngine.onMarketSwitch = (market) => setActiveMarket(market);
 
