@@ -835,9 +835,14 @@ class EnhancedTradeEngine {
         const mult = this.config.antiMartMultiplier || 2.0;
         channel.step = (channel.step || 0) + 1;
         const maxSteps = this.config.maxSteps || 6;
-        if (channel.step > maxSteps) channel.step = maxSteps;
-        channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
-        this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Anti-Martingale: Next stake $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
+        if (channel.step > maxSteps) {
+          channel.step = 0;
+          channel.stake = this.config.baseStake;
+          this.sendLog(`🎉 [${channelKey}] WIN $${profit.toFixed(2)} — Anti-Martingale Max Steps Reached! Profit Secured. Stake reset to $${this.config.baseStake.toFixed(2)}`);
+        } else {
+          channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
+          this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Anti-Martingale: Next stake $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
+        }
       } else {
         // Normal: reset on WIN
         channel.step = 0;
@@ -856,9 +861,14 @@ class EnhancedTradeEngine {
         const mult = (this.config.recoveryEnabled !== false) ? (this.config.martMultiplier || 2.0) : 1.0;
         channel.step = (channel.step || 0) + 1;
         const maxSteps = this.config.maxSteps || 6;
-        if (channel.step > maxSteps) channel.step = maxSteps;
-        channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
-        this.sendLog(`❌ [${channelKey}] LOSS — Next stake: $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
+        if (channel.step > maxSteps) {
+          channel.step = 0;
+          channel.stake = this.config.baseStake;
+          this.sendLog(`🚨 [${channelKey}] LOSS — Max Recovery Steps (${maxSteps}) Reached! Cutting losses. Stake reset to $${this.config.baseStake.toFixed(2)}`);
+        } else {
+          channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
+          this.sendLog(`❌ [${channelKey}] LOSS — Next stake: $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
+        }
       }
     }
 

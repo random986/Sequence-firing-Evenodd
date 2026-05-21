@@ -12,8 +12,8 @@ export const MARKETS = [
 
 export const MARKET_LABELS = {
   'R_10': 'V10', 'R_25': 'V25', 'R_50': 'V50', 'R_75': 'V75', 'R_100': 'V100',
-  '1HZ10V': '1s V10', '1HZ25V': '1s V25', '1HZ50V': '1s V50',
-  '1HZ75V': '1s V75', '1HZ100V': '1s V100',
+  '1HZ10V': 'V10 1s', '1HZ25V': 'V25 1s', '1HZ50V': 'V50 1s',
+  '1HZ75V': 'V75 1s', '1HZ100V': 'V100 1s',
   'JD10': 'J10', 'JD25': 'J25', 'JD50': 'J50',
   'JD75': 'J75', 'JD100': 'J100'
 };
