@@ -17,6 +17,8 @@ const defaults = {
   maxSteps: 6,
   martMultiplier: 2.0,
   recoveryEnabled: true,      // Martingale ON by default
+  antiMartEnabled: false,     // Anti-martingale (increase on WIN, reset on LOSS)
+  antiMartMultiplier: 2.0,    // Multiplier for anti-martingale
   switchAfterLosses: 3,
   stopLoss: 0,
   takeProfit: 0,

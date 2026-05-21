@@ -372,6 +372,19 @@ class EnhancedTradeEngine {
       }
     }
 
+    // Global Stop Loss & Take Profit checks
+    if (this.sessionOpeningBalance > 0) {
+      const currentPnL = balance - this.sessionOpeningBalance;
+      if (this.config.stopLoss > 0 && currentPnL <= -this.config.stopLoss) {
+        this.stop(`Stop Loss Reached: PnL is -$${Math.abs(currentPnL).toFixed(2)} (Limit: -$${this.config.stopLoss.toFixed(2)})`);
+        return;
+      }
+      if (this.config.takeProfit > 0 && currentPnL >= this.config.takeProfit) {
+        this.stop(`Take Profit Reached: PnL is +$${currentPnL.toFixed(2)} (Target: +$${this.config.takeProfit.toFixed(2)})`);
+        return;
+      }
+    }
+
     // Cooldown check
     if (this.nextAllowedTradeTime && now < this.nextAllowedTradeTime) {
       const waitMs = this.nextAllowedTradeTime - now;
@@ -765,32 +778,60 @@ class EnhancedTradeEngine {
     channel.contractId = null;
     if (channelKey === 'SINGLE') channel.direction = null;
 
-    // ═══ MARTINGALE for DUAL strategies (BOTH5 / BOTH / EO_WINNING / OU_WINNING) ═══
+    // ═══ MARTINGALE & ANTI-MARTINGALE for DUAL strategies (BOTH5 / BOTH / EO_WINNING / OU_WINNING) ═══
     const isDualStrategy = this.strategy === 'BOTH5' || this.strategy === 'BOTH' ||
                            this.strategy === 'OU_WINNING' || this.strategy === 'EO_WINNING';
     if (isDualStrategy && channelKey !== 'SINGLE') {
-      const mult = (this.config.recoveryEnabled !== false) ? (this.config.martMultiplier || 2.0) : 1.0;
       if (won) {
-        // Win: reset this channel's stake back to base
-        channel.step = 0;
-        channel.stake = this.config.baseStake;
-        this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Stake reset to $${this.config.baseStake.toFixed(2)}`);
+        channel.consecutiveLosses = 0;
+        if (this.config.antiMartEnabled) {
+          // Anti-Martingale: escalate on WIN
+          const mult = this.config.antiMartMultiplier || 2.0;
+          channel.step = (channel.step || 0) + 1;
+          const maxSteps = this.config.maxSteps || 6;
+          if (channel.step > maxSteps) channel.step = maxSteps;
+          channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
+          this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Anti-Martingale: Next stake $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
+        } else {
+          // Normal: reset on WIN
+          channel.step = 0;
+          channel.stake = this.config.baseStake;
+          this.sendLog(`✅ [${channelKey}] WIN $${profit.toFixed(2)} — Stake reset to $${this.config.baseStake.toFixed(2)}`);
+        }
       } else {
-        // Loss: escalate this channel's stake by martingale multiplier
-        channel.step = (channel.step || 0) + 1;
-        const maxSteps = this.config.maxSteps || 6;
-        if (channel.step > maxSteps) channel.step = maxSteps;
-        channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
-        this.sendLog(`❌ [${channelKey}] LOSS — Next stake: $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
+        channel.consecutiveLosses = (channel.consecutiveLosses || 0) + 1;
+        if (this.config.antiMartEnabled) {
+          // Anti-Martingale: reset on LOSS
+          channel.step = 0;
+          channel.stake = this.config.baseStake;
+          this.sendLog(`❌ [${channelKey}] LOSS — Anti-Martingale: Stake reset to $${this.config.baseStake.toFixed(2)}`);
+        } else {
+          // Normal Martingale: escalate on LOSS
+          const mult = (this.config.recoveryEnabled !== false) ? (this.config.martMultiplier || 2.0) : 1.0;
+          channel.step = (channel.step || 0) + 1;
+          const maxSteps = this.config.maxSteps || 6;
+          if (channel.step > maxSteps) channel.step = maxSteps;
+          channel.stake = parseFloat((this.config.baseStake * Math.pow(mult, channel.step)).toFixed(2));
+          this.sendLog(`❌ [${channelKey}] LOSS — Next stake: $${channel.stake.toFixed(2)} (step ${channel.step}, x${mult})`);
+        }
       }
+
+      // Auto Switch for dual strategies: if a channel hits 3 consecutive losses
+      if (!won && channel.consecutiveLosses >= (this.config.switchAfterLosses || 3)) {
+        if (this.config.autoSwitchMarkets !== false) {
+          this.sendLog(`⚠️ [${channelKey}] reached ${channel.consecutiveLosses} consecutive losses. Rotating market...`);
+          channel.consecutiveLosses = 0; // reset
+          this._switchMarketLegacy();
+        }
+      }
+
+      // Always record trade to history
+      if (this.onTradeUpdate) this.onTradeUpdate(trade);
 
       // ── Check if BOTH paired channels have settled → fire immediately ──
       const dirs = (this.strategy === 'OU_WINNING' || this.strategy === 'BOTH5')
         ? ['OVER5', 'UNDER5'] : ['EVEN', 'ODD'];
       const bothSettled = dirs.every(d => !this.channels[d].active);
-
-      // Always record trade to history
-      if (this.onTradeUpdate) this.onTradeUpdate(trade);
 
       if (bothSettled && this.running) {
         // No cooldown for dual strategies — fire at next tick

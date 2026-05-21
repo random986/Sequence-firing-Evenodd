@@ -159,6 +159,33 @@ export default function Settings() {
               </div>
             </div>
 
+            {/* Anti-Martingale Toggle */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Anti-Martingale (Reverse)</span>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {config.antiMartEnabled ? 'Increases stake after a WIN' : 'Disabled'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => config.updateConfig({ antiMartEnabled: !config.antiMartEnabled })}
+                  style={{
+                    width: 48, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
+                    background: config.antiMartEnabled ? 'var(--cyan)' : 'rgba(255,255,255,0.1)',
+                    position: 'relative', transition: 'background 0.2s',
+                  }}
+                >
+                  <div style={{
+                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    position: 'absolute', top: 3,
+                    left: config.antiMartEnabled ? 25 : 3,
+                    transition: 'left 0.2s',
+                  }} />
+                </button>
+              </div>
+            </div>
+
             <div style={{ padding: '16px 0', borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -188,6 +215,14 @@ export default function Settings() {
               <SliderInput
                 label="Martingale Multiplier" value={config.martMultiplier} unit="x"
                 onChange={(v) => config.updateConfig({ martMultiplier: v })}
+                min={1} max={3} step={0.1}
+              />
+            )}
+
+            {config.antiMartEnabled && (
+              <SliderInput
+                label="Anti-Martingale Multiplier" value={config.antiMartMultiplier} unit="x"
+                onChange={(v) => config.updateConfig({ antiMartMultiplier: v })}
                 min={1} max={3} step={0.1}
               />
             )}
