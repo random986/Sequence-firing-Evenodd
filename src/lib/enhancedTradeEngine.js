@@ -588,7 +588,7 @@ class EnhancedTradeEngine {
       price: stake,
       parameters: {
         contract_type: spec.contract_type,
-        underlying_symbol: this.activeMarket,
+        symbol: this.activeMarket,
         duration: 1,
         duration_unit: 't',
         currency: derivWS.accountInfo?.currency || 'USD',
@@ -993,7 +993,7 @@ class EnhancedTradeEngine {
           price: stake,
           parameters: {
             contract_type: spec.contract_type,
-            underlying_symbol: this.activeMarket,
+            symbol: this.activeMarket,
             duration: 1,
             duration_unit: 't',
             currency: derivWS.accountInfo?.currency || 'USD',

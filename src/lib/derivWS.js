@@ -23,11 +23,7 @@ class DerivWebSocket {
     this.onAccountUpdate = null;
   }
 
-  getLegacyAppId() {
-    return '1089';
-  }
-
-  getNewAppId() {
+  getAppId() {
     return '33h51PQlu5tsWflEmmoxW';
   }
 
@@ -47,15 +43,18 @@ class DerivWebSocket {
     this.status = 'connecting';
     this._emitStatus();
 
-    let wsUrl = `${WS_URL}?app_id=${this.getLegacyAppId()}`;
+    const appId = this.getAppId();
+    const isAlphanumeric = isNaN(Number(appId));
+    let wsUrl = `${WS_URL}?app_id=${appId}`;
+    let usedOtp = false;
 
-    if (this.token && this.accountId) {
+    if (this.token && this.accountId && isAlphanumeric) {
       try {
         const response = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${this.accountId}/otp`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${this.token}`,
-            'Deriv-App-ID': this.getNewAppId()
+            'Deriv-App-ID': appId
           }
         });
 
@@ -67,6 +66,7 @@ class DerivWebSocket {
         const finalUrl = data?.data?.url || data?.url;
         if (finalUrl) {
           wsUrl = finalUrl;
+          usedOtp = true;
         } else {
           throw new Error('OTP response did not contain a URL');
         }
@@ -92,8 +92,7 @@ class DerivWebSocket {
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
 
-      // If we connected with token/accountId via OTP, we are automatically authorized
-      if (this.token && this.accountId) {
+      const setupAuthorized = () => {
         this.status = 'authorized';
         this.accountInfo = {
           loginid: this.accountId,
@@ -125,6 +124,25 @@ class DerivWebSocket {
         this.tickSubscriptions.forEach(sym => {
           this.send({ ticks: sym, subscribe: 1 });
         });
+      };
+
+      if (this.token && this.accountId) {
+        if (usedOtp) {
+          // If we connected with token/accountId via OTP, we are automatically authorized
+          setupAuthorized();
+        } else {
+          // Legacy API requires manual authorization via WebSocket
+          this.status = 'connected';
+          this.send({ authorize: this.token }).then(authRes => {
+            if (authRes.error) {
+              console.error('WebSocket authorization failed:', authRes.error);
+              this.status = 'error';
+              this._emitStatus();
+              return;
+            }
+            setupAuthorized();
+          });
+        }
       } else {
         this.status = 'connected';
         this._emitStatus();

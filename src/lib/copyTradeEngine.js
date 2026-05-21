@@ -6,8 +6,7 @@
    ══════════════════════════════════════════════════════════════ */
 
 const WS_URL = 'wss://ws.derivws.com/websockets/v3';
-const LEGACY_APP_ID = '1089';
-const NEW_APP_ID = '33h51PQlu5tsWflEmmoxW';
+const APP_ID = '33h51PQlu5tsWflEmmoxW';
 
 class CopyTradeEngine {
   constructor() {
@@ -125,22 +124,25 @@ class CopyTradeEngine {
     this._emitStatus();
     this._log('🔌 Connecting target WebSocket...');
 
-    let wsUrl = `${WS_URL}?app_id=${LEGACY_APP_ID}`;
+    const isAlphanumeric = isNaN(Number(APP_ID));
+    let wsUrl = `${WS_URL}?app_id=${APP_ID}`;
+    let usedOtp = false;
 
-    // Try OTP route
-    if (this.targetToken && this.targetAccountId) {
+    // Try OTP route if ID is alphanumeric
+    if (this.targetToken && this.targetAccountId && isAlphanumeric) {
       try {
         const response = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${this.targetAccountId}/otp`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${this.targetToken}`,
-            'Deriv-App-ID': NEW_APP_ID
+            'Deriv-App-ID': APP_ID
           }
         });
         if (response.ok) {
           const data = await response.json();
           if (data.otp_url) {
             wsUrl = data.otp_url;
+            usedOtp = true;
             this._log('🔑 OTP URL obtained for target account.');
           }
         }
@@ -155,11 +157,12 @@ class CopyTradeEngine {
       this._log('✅ Target WebSocket connected.');
       this.reconnectAttempts = 0;
 
-      if (wsUrl !== `${WS_URL}?app_id=${LEGACY_APP_ID}`) {
+      if (usedOtp) {
         this.status = 'authorized';
         this._emitStatus();
         this._log('🔐 Target account authorized via OTP.');
       } else if (this.targetToken) {
+        // Legacy system needs manual authorization via WebSocket payload
         this.ws.send(JSON.stringify({ authorize: this.targetToken }));
       }
     };
