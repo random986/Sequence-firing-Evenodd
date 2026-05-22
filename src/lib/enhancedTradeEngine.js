@@ -863,8 +863,9 @@ class EnhancedTradeEngine {
         // Normal Martingale: escalate on LOSS
         const mult = this.config.martMultiplier || 2.0;
         channel.step = (channel.step || 0) + 1;
-        const maxSteps = this.config.maxSteps || 6;
-        if (channel.step > maxSteps) {
+        const maxSteps = this.config.maxSteps !== undefined ? this.config.maxSteps : 6;
+        
+        if (maxSteps > 0 && channel.step > maxSteps) {
           channel.step = 0;
           channel.stake = this.config.baseStake;
           this.sendLog(`🚨 [${channelKey}] LOSS — Max Recovery Steps (${maxSteps}) Reached! Cutting losses. Stake reset to $${this.config.baseStake.toFixed(2)}`);

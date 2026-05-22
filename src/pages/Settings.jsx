@@ -220,11 +220,19 @@ export default function Settings() {
             )}
 
             {config.recoveryEnabled && (
-              <SliderInput
-                label="Martingale Multiplier" value={config.martMultiplier} unit="x"
-                onChange={(v) => config.updateConfig({ martMultiplier: v })}
-                min={1} max={3} step={0.1}
-              />
+              <>
+                <SliderInput
+                  label="Martingale Multiplier" value={config.martMultiplier} unit="x"
+                  onChange={(v) => config.updateConfig({ martMultiplier: v })}
+                  min={1} max={3} step={0.1}
+                />
+                <SliderInput
+                  label="Max Martingale Steps" value={config.maxSteps !== undefined ? config.maxSteps : 6} unit="steps"
+                  onChange={(v) => config.updateConfig({ maxSteps: v })}
+                  min={0} max={15} step={1}
+                />
+                {(config.maxSteps || 0) === 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>0 = No limit (Danger)</div>}
+              </>
             )}
 
             {config.antiMartEnabled && (
