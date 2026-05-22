@@ -92,7 +92,28 @@ class MarketScanner {
 
     const slice = digits.slice(-ANALYSIS_WINDOW);
     const full = digits.slice(-BUFFER_SIZE);
+    
+    // ═══ LONG-TERM TREND (last 100 ticks) ═══
+    const LONG_WINDOW = 100;
+    const longSlice = digits.slice(-Math.min(digits.length, LONG_WINDOW));
 
+    let ltOverCount = 0, ltUnderCount = 0;
+    for (const d of longSlice) {
+      if (d > 5) ltOverCount++;
+      else if (d < 5) ltUnderCount++;
+    }
+    const ltOverPct = (ltOverCount / longSlice.length) * 100;
+    const ltUnderPct = (ltUnderCount / longSlice.length) * 100;
+
+    let ltEvenCount = 0, ltOddCount = 0;
+    for (const d of longSlice) {
+      if (d % 2 === 0) ltEvenCount++;
+      else ltOddCount++;
+    }
+    const ltEvenPct = (ltEvenCount / longSlice.length) * 100;
+    const ltOddPct = (ltOddCount / longSlice.length) * 100;
+
+    // ═══ SHORT-TERM MOMENTUM (last 25 ticks) ═══
     // Over/Under 5 analysis
     let overCount = 0, underCount = 0, d5Count = 0;
     for (const d of slice) {
@@ -131,10 +152,24 @@ class MarketScanner {
       }
     }
 
+    // ═══ CONSECUTIVE LOSS STREAK ANALYSIS ═══
+    // Count how many of the LAST N ticks went AGAINST each direction
+    // This tells us how "exhausted" the losing side is
+    const recentWindow = digits.slice(-15);
+    let recentOverLosses = 0, recentUnderLosses = 0;
+    let recentEvenLosses = 0, recentOddLosses = 0;
+    // Count from the END backwards — how many consecutive ticks go against each direction
+    for (let i = recentWindow.length - 1; i >= 0; i--) {
+      const d = recentWindow[i];
+      if (d <= 5 && recentOverLosses === (recentWindow.length - 1 - i)) recentOverLosses++;
+      if (d >= 5 && recentUnderLosses === (recentWindow.length - 1 - i)) recentUnderLosses++;
+      if (d % 2 !== 0 && recentEvenLosses === (recentWindow.length - 1 - i)) recentEvenLosses++;
+      if (d % 2 === 0 && recentOddLosses === (recentWindow.length - 1 - i)) recentOddLosses++;
+    }
+
     // Confidence calculation (200-tick history)
     let confidence = 50;
     if (full.length >= 50) {
-      // Count how often the current streak-type continues
       let cont = 0, total = 0;
       for (let i = 1; i < full.length; i++) {
         const prev = full[i - 1] % 2 === 0;
@@ -164,6 +199,17 @@ class MarketScanner {
       freq,
       tickCount: digits.length,
       lastDigit: digits[digits.length - 1],
+      // ═══ DUAL-TIMEFRAME FIELDS ═══
+      ltOverPct: ltOverPct.toFixed(1),
+      ltUnderPct: ltUnderPct.toFixed(1),
+      ltEvenPct: ltEvenPct.toFixed(1),
+      ltOddPct: ltOddPct.toFixed(1),
+      ltTickCount: longSlice.length,
+      // ═══ CONSECUTIVE LOSS STREAK FIELDS ═══
+      recentOverLosses,
+      recentUnderLosses,
+      recentEvenLosses,
+      recentOddLosses,
     };
   }
 
