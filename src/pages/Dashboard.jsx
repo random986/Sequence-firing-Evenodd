@@ -144,19 +144,6 @@ export default function Dashboard() {
 
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Strategy:</span>
             <button
-              onClick={() => config.updateConfig({ strategy: 'OMNI_SNIPER' })}
-              style={{
-                background: config.strategy === 'OMNI_SNIPER' ? 'var(--cyan)' : 'rgba(255,255,255,0.05)',
-                border: config.strategy === 'OMNI_SNIPER' ? 'none' : '1px solid var(--border)',
-                color: config.strategy === 'OMNI_SNIPER' ? '#000' : 'var(--cyan)',
-                fontSize: 11, fontWeight: 700, padding: '4px 10px',
-                borderRadius: 4, cursor: 'pointer', transition: 'all 0.2s',
-                boxShadow: config.strategy === 'OMNI_SNIPER' ? '0 0 10px rgba(0, 255, 255, 0.4)' : 'none'
-              }}
-            >
-              🚀 OMNI SNIPER
-            </button>
-            <button
               onClick={() => config.updateConfig({ strategy: 'BOTH' })}
               style={{
                 background: config.strategy === 'BOTH' ? 'var(--cyan)' : 'rgba(255,255,255,0.05)',
@@ -179,6 +166,30 @@ export default function Dashboard() {
               }}
             >
               OVER / UNDER 5
+            </button>
+            <button
+              onClick={() => config.updateConfig({ strategy: 'EO_WINNING' })}
+              style={{
+                background: config.strategy === 'EO_WINNING' ? 'var(--cyan)' : 'rgba(255,255,255,0.05)',
+                border: config.strategy === 'EO_WINNING' ? 'none' : '1px solid var(--border)',
+                color: config.strategy === 'EO_WINNING' ? '#000' : 'var(--text-muted)',
+                fontSize: 11, fontWeight: 700, padding: '4px 10px',
+                borderRadius: 4, cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              EO WINNING
+            </button>
+            <button
+              onClick={() => config.updateConfig({ strategy: 'OU_WINNING' })}
+              style={{
+                background: config.strategy === 'OU_WINNING' ? 'var(--cyan)' : 'rgba(255,255,255,0.05)',
+                border: config.strategy === 'OU_WINNING' ? 'none' : '1px solid var(--border)',
+                color: config.strategy === 'OU_WINNING' ? '#000' : 'var(--text-muted)',
+                fontSize: 11, fontWeight: 700, padding: '4px 10px',
+                borderRadius: 4, cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              OU WINNING
             </button>
           </div>
         </div>

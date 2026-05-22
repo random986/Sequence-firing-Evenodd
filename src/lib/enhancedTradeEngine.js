@@ -781,11 +781,11 @@ class EnhancedTradeEngine {
 
     // Extract the exact exit digit using strict string parsing to avoid float truncation bugs
     let finalDigit = '-';
-    const rawExit = contract.exit_tick_display_value || contract.sell_spot_display_value;
+    const rawExit = contract.exit_tick_display_value || contract.sell_spot_display_value || contract.current_spot_display_value;
     if (rawExit) {
       finalDigit = String(rawExit).slice(-1);
     } else {
-      const rawNum = contract.exit_tick || contract.sell_spot;
+      const rawNum = contract.exit_tick || contract.sell_spot || contract.current_spot;
       if (rawNum) finalDigit = String(rawNum).slice(-1); // less reliable if trailing zero is truncated, but best fallback
     }
 
@@ -991,12 +991,7 @@ class EnhancedTradeEngine {
         }
 
         let finalTarget;
-        if (!userDigit || userDigit === 'AUTO') {
-          const winsThreshold = this.config.diffWinsToChangeDigit || 5;
-          if (this.currentAutoDigit === null || this.winsSinceDigitChange >= winsThreshold) {
-            const indexed = scores.freq.map((f, d) => ({ digit: d, freq: f }));
-            indexed.sort((a, b) => a.freq - b.freq);
-            this.currentAutoDigit = (indexed.length >= 2 ? indexed[1] : indexed[0]).digit.toString();
+indexed[1] : indexed[0]).digit.toString();
             this.winsSinceDigitChange = 0;
           }
           finalTarget = this.currentAutoDigit;
@@ -1009,7 +1004,7 @@ class EnhancedTradeEngine {
         return;
       }
 
-      // ═══ STRATEGY EVALUATION (OMNI_SNIPER, BOTH5, EVEN/ODD) ═══
+      // ═══ STRATEGY EVALUATION (BOTH, BOTH5) ═══
       const minConf = this.config.minConfidence || 65;
       
       const overPct = parseFloat(scores.overPct) || 0;
@@ -1017,70 +1012,132 @@ class EnhancedTradeEngine {
       const evenPct = parseFloat(scores.evenPct) || 0;
       const oddPct = parseFloat(scores.oddPct) || 0;
 
-      const ltOverPct = parseFloat(scores.ltOverPct) || 0;
-      const ltUnderPct = parseFloat(scores.ltUnderPct) || 0;
-      const ltEvenPct = parseFloat(scores.ltEvenPct) || 0;
-      const ltOddPct = parseFloat(scores.ltOddPct) || 0;
+      const activeSubStrategy = this.strategy === 'BOTH5' ? 'BOTH5' : 'EVEN/ODD';
 
-      // Calculate directions
-      const stOuDir = overPct > underPct ? 'OVER5' : 'UNDER5';
-      const ltOuDir = ltOverPct > ltUnderPct ? 'OVER5' : 'UNDER5';
-      const ouConf = Math.max(overPct, underPct);
-      const ouAligned = stOuDir === ltOuDir;
+      // ═══ DUAL-SIDED VIRTUAL LOSS WAITER ═══
+      // Instead of locking into one trend direction and waiting 20 minutes, we track
+      // BOTH sides of the strategy simultaneously. Whichever side hits the loss threshold
+      // AND provides a confirmation win tick will be executed.
+      
+      const requiredVirtualLosses = this.config.virtualLossesToWait !== undefined ? this.config.virtualLossesToWait : 3;
+      const ticks = scanner.buffers[this.activeMarket] || [];
+      const currentTickCount = scanner.tickCounts[this.activeMarket] || 0;
 
-      const stEoDir = evenPct > oddPct ? 'EVEN' : 'ODD';
-      const ltEoDir = ltEvenPct > ltOddPct ? 'EVEN' : 'ODD';
-      const eoConf = Math.max(evenPct, oddPct);
-      const eoAligned = stEoDir === ltEoDir;
-
-      let stDominantPct = 0;
-      let stDominantDir = null;
-      let ltDominantDir = null;
-      let activeSubStrategy = null;
-
-      if (this.strategy === 'OMNI_SNIPER') {
-        // Evaluate both and pick the best aligned one
-        if (ouAligned && eoAligned) {
-          if (ouConf >= eoConf) {
-            stDominantPct = ouConf; stDominantDir = stOuDir; ltDominantDir = ltOuDir; activeSubStrategy = 'BOTH5';
-          } else {
-            stDominantPct = eoConf; stDominantDir = stEoDir; ltDominantDir = ltEoDir; activeSubStrategy = 'EVEN/ODD';
-          }
-        } else if (ouAligned) {
-          stDominantPct = ouConf; stDominantDir = stOuDir; ltDominantDir = ltOuDir; activeSubStrategy = 'BOTH5';
-        } else if (eoAligned) {
-          stDominantPct = eoConf; stDominantDir = stEoDir; ltDominantDir = ltEoDir; activeSubStrategy = 'EVEN/ODD';
-        } else {
-          // Neither aligned, just default to OU for the mismatch gate to catch it
-          stDominantPct = ouConf; stDominantDir = stOuDir; ltDominantDir = ltOuDir; activeSubStrategy = 'BOTH5';
-        }
-      } else if (this.strategy === 'BOTH5') {
-        stDominantPct = ouConf; stDominantDir = stOuDir; ltDominantDir = ltOuDir; activeSubStrategy = 'BOTH5';
-      } else {
-        // EVEN/ODD
-        stDominantPct = eoConf; stDominantDir = stEoDir; ltDominantDir = ltEoDir; activeSubStrategy = 'EVEN/ODD';
-      }
-
-      // ═══ DUAL-TIMEFRAME ALIGNMENT GATE ═══
-      // REFUSE to trade if short-term and long-term disagree — it's a choppy fakeout
-      if (stDominantDir !== ltDominantDir) {
-        this.updateStatus(`⏸ Trend Mismatch: ST=${stDominantDir} vs LT=${ltDominantDir}. Waiting...`);
-        if (!this._lastMismatchToast || Date.now() - this._lastMismatchToast > 8000) {
-          toast(`Trend mismatch: Short=${stDominantDir}, Long=${ltDominantDir}. Waiting for alignment.`, { icon: '⚠️', id: 'trend-mismatch' });
-          this._lastMismatchToast = Date.now();
-        }
-        // Reset virtual loss count when trend flips — old data is stale
-        this.virtualLossCount = 0;
-        this._virtualConfirmationPending = false;
-        this._scheduleNext(1500);
+      if (ticks.length < requiredVirtualLosses + 1) {
+        this.updateStatus('Gathering ticks...');
+        this._scheduleNext(1000);
         return;
       }
 
-      // Both timeframes agree — this is our chosen direction
-      let chosenDirection = stDominantDir;
+      // We only process if we have a new tick
+      if (this._lastProcessedTickCount === currentTickCount) {
+        this._scheduleNext(1000);
+        return;
+      }
+      this._lastProcessedTickCount = currentTickCount;
 
-      // ═══ MARKET SWITCH ON CONSECUTIVE LOSSES ═══
-      // Use the user's configured switchAfterLosses (not hardcoded 2)
+      const lastTick = ticks[ticks.length - 1];
+
+      // Calculate the consecutive loss streaks from the perspective of the tick BEFORE the last tick
+      // Because the last tick is evaluated as our potential "confirmation win"
+      let evenLossStreak = 0;
+      let oddLossStreak = 0;
+      let overLossStreak = 0;
+      let underLossStreak = 0;
+
+      for (let i = ticks.length - 2; i >= 0; i--) {
+        const d = ticks[i];
+        const dist = ticks.length - 2 - i;
+        
+        // A loss for EVEN is an ODD digit
+        if (d % 2 !== 0 && evenLossStreak === dist) evenLossStreak++;
+        // A loss for ODD is an EVEN digit
+        if (d % 2 === 0 && oddLossStreak === dist) oddLossStreak++;
+        
+        // A loss for OVER5 is a digit <= 5 (Wait, DIGITOVER 5 means > 5. So loss is <= 5)
+        if (d <= 5 && overLossStreak === dist) overLossStreak++;
+        // A loss for UNDER5 is a digit >= 5
+        if (d >= 5 && underLossStreak === dist) underLossStreak++;
+      }
+
+      let chosenDirection = null;
+
+      if (activeSubStrategy === 'BOTH5') {
+        const overReady = overLossStreak >= requiredVirtualLosses && lastTick > 5;
+        const underReady = underLossStreak >= requiredVirtualLosses && lastTick < 5;
+
+        if (overReady && underReady) {
+          chosenDirection = overPct > underPct ? 'OVER5' : 'UNDER5';
+        } else if (overReady) {
+          chosenDirection = 'OVER5';
+        } else if (underReady) {
+          chosenDirection = 'UNDER5';
+        } else {
+          // Status update
+          const maxStreak = Math.max(overLossStreak, underLossStreak);
+          if (maxStreak > 0) {
+            toast(`📉 Virtual Losses: Over=${overLossStreak}, Under=${underLossStreak}`, { icon: '📉', id: 'virtual-loss' });
+          }
+          this.updateStatus(`📊 Paper Trading: Over=${overLossStreak}, Under=${underLossStreak} (Threshold: ${requiredVirtualLosses})`);
+          this._scheduleNext(1000);
+          return;
+        }
+      } else {
+        // EVEN/ODD
+        const evenReady = evenLossStreak >= requiredVirtualLosses && lastTick % 2 === 0;
+        const oddReady = oddLossStreak >= requiredVirtualLosses && lastTick % 2 !== 0;
+
+        if (evenReady && oddReady) {
+          chosenDirection = evenPct > oddPct ? 'EVEN' : 'ODD';
+        } else if (evenReady) {
+          chosenDirection = 'EVEN';
+        } else if (oddReady) {
+          chosenDirection = 'ODD';
+        } else {
+          // Status update
+          const maxStreak = Math.max(evenLossStreak, oddLossStreak);
+          if (maxStreak > 0) {
+            toast(`📉 Virtual Losses: Even=${evenLossStreak}, Odd=${oddLossStreak}`, { icon: '📉', id: 'virtual-loss' });
+          }
+          this.updateStatus(`📊 Paper Trading: Even=${evenLossStreak}, Odd=${oddLossStreak} (Threshold: ${requiredVirtualLosses})`);
+          this._scheduleNext(1000);
+          return;
+        }
+      }
+
+      // ═══ MINIMUM CONFIDENCE CHECK ═══
+      // Now that we have a chosen direction based on the dual-sided virtual loss,
+      // ensure that direction meets our minimum confidence threshold.
+      let dirConf = 0;
+      if (chosenDirection === 'OVER5') dirConf = overPct;
+      if (chosenDirection === 'UNDER5') dirConf = underPct;
+      if (chosenDirection === 'EVEN') dirConf = evenPct;
+      if (chosenDirection === 'ODD') dirConf = oddPct;
+
+      if (dirConf < minConf) {
+        if (this.config.autoSwitchMarkets !== false) {
+          const ranked = scanner.getRanked(this.strategy);
+          const best = ranked[0];
+          if (best && best.symbol !== this.activeMarket) {
+            this.sendLog(`Confidence for ${chosenDirection} (${dirConf.toFixed(0)}%) < ${minConf}%. Auto-switching to best market: ${best.label}...`);
+            toast(`Low Signal. Switching to ${best.label}`, { icon: '🔄', id: 'market-switch' });
+            this.activeMarket = best.symbol;
+            if (this.onMarketSwitch) this.onMarketSwitch(this.activeMarket);
+          } else {
+            this.updateStatus(`Low signal (${dirConf.toFixed(0)}% < ${minConf}%)`);
+            if (!this._lastLowSignalToast || Date.now() - this._lastLowSignalToast > 10000) {
+              toast(`Signal strength low (${dirConf.toFixed(0)}%), waiting...`, { icon: '⏳', id: 'low-signal' });
+              this._lastLowSignalToast = Date.now();
+            }
+          }
+        } else {
+          this.updateStatus(`Waiting for signal strength (${dirConf.toFixed(0)}% < ${minConf}%)`);
+        }
+        this._scheduleNext(1000);
+        return;
+      }
+
+      // ═══ MARKET SWITCH ON CONSECUTIVE REAL LOSSES ═══
       const switchThreshold = this.config.switchAfterLosses || 3;
       if (this.channels.SINGLE.consecutiveLosses >= switchThreshold && this.config.autoSwitchMarkets !== false) {
         const ranked = scanner.getRanked(this.strategy);
@@ -1091,127 +1148,12 @@ class EnhancedTradeEngine {
           toast(`${reason}. Moving to ${best.label}`, { icon: '🔄', id: 'market-switch' });
           this.activeMarket = best.symbol;
           this.channels.SINGLE.consecutiveLosses = 0;
-          this.virtualLossCount = 0;
-          this._virtualConfirmationPending = false;
           if (this.onMarketSwitch) this.onMarketSwitch(this.activeMarket);
-          // Re-read the new market's dominant direction
-          const newScores = scanner.scores[this.activeMarket];
-          if (this.strategy === 'OMNI_SNIPER') {
-            // Just let it re-evaluate fully on the next tick
-            chosenDirection = 'EVEN'; 
-          } else if (this.strategy === 'BOTH5') {
-            const op = parseFloat(newScores?.overPct) || 0;
-            const up = parseFloat(newScores?.underPct) || 0;
-            chosenDirection = op > up ? 'OVER5' : 'UNDER5';
-          } else {
-            const ep = parseFloat(newScores?.evenPct) || 0;
-            const op2 = parseFloat(newScores?.oddPct) || 0;
-            chosenDirection = ep > op2 ? 'EVEN' : 'ODD';
-          }
-          // After switching, wait one cycle before trading to let the new market's data settle
           this._scheduleNext(2000);
           return;
         }
       }
 
-      // ═══ MINIMUM CONFIDENCE CHECK ═══
-      if (stDominantPct < minConf) {
-        if (this.config.autoSwitchMarkets !== false) {
-          const ranked = scanner.getRanked(this.strategy);
-          const best = ranked[0];
-          if (best && best.symbol !== this.activeMarket) {
-            this.sendLog(`Confidence ${stDominantPct.toFixed(0)}% < ${minConf}%. Auto-switching to best market: ${best.label}...`);
-            toast(`Low Signal. Switching to ${best.label}`, { icon: '🔄', id: 'market-switch' });
-            this.activeMarket = best.symbol;
-            if (this.onMarketSwitch) this.onMarketSwitch(this.activeMarket);
-          } else {
-            this.updateStatus(`Low signal (${stDominantPct.toFixed(0)}% < ${minConf}%)`);
-            if (!this._lastLowSignalToast || Date.now() - this._lastLowSignalToast > 10000) {
-              toast(`Signal strength low (${stDominantPct.toFixed(0)}%), waiting...`, { icon: '⏳', id: 'low-signal' });
-              this._lastLowSignalToast = Date.now();
-            }
-          }
-        } else {
-          this.updateStatus(`Waiting for signal strength (${stDominantPct.toFixed(0)}% < ${minConf}%)`);
-          if (!this._lastLowSignalToast || Date.now() - this._lastLowSignalToast > 10000) {
-            toast(`Signal strength low (${stDominantPct.toFixed(0)}%), waiting...`, { icon: '⏳', id: 'low-signal' });
-            this._lastLowSignalToast = Date.now();
-          }
-        }
-        this._scheduleNext(1000);
-        return;
-      }
-
-      // ═══ VIRTUAL LOSS WAITER (DEEP PAPER TRADING) ═══
-      // Uses the scanner's real consecutive-loss-streak data for the chosen direction.
-      // After the threshold is met, we ALSO require a confirmation win tick before firing.
-      const requiredVirtualLosses = this.config.virtualLossesToWait !== undefined ? this.config.virtualLossesToWait : 3;
-      
-      if (requiredVirtualLosses > 0) {
-        const ticks = scanner.buffers[this.activeMarket] || [];
-        const currentTickCount = scanner.tickCounts[this.activeMarket] || 0;
-        
-        if (ticks.length > 0) {
-          const lastTick = ticks[ticks.length - 1];
-          
-          // Reset virtual loss state if the bot changed its mind about direction
-          if (this._lastVirtualDirection !== chosenDirection) {
-            this.virtualLossCount = 0;
-            this._virtualConfirmationPending = false;
-            this._lastVirtualDirection = chosenDirection;
-          }
-
-          // Determine if the LAST tick would be a win for our chosen direction
-          let lastTickIsWin = false;
-          if (activeSubStrategy === 'BOTH5') {
-            lastTickIsWin = chosenDirection === 'OVER5' ? lastTick > 5 : lastTick < 5;
-          } else {
-            lastTickIsWin = chosenDirection === 'EVEN' ? lastTick % 2 === 0 : lastTick % 2 !== 0;
-          }
-
-          // Get the scanner's consecutive-loss-streak for our chosen direction
-          let scannerLossStreak = 0;
-          if (activeSubStrategy === 'BOTH5') {
-            scannerLossStreak = chosenDirection === 'OVER5' ? (scores.recentOverLosses || 0) : (scores.recentUnderLosses || 0);
-          } else {
-            scannerLossStreak = chosenDirection === 'EVEN' ? (scores.recentEvenLosses || 0) : (scores.recentOddLosses || 0);
-          }
-
-          // Only process new ticks
-          if (this._lastProcessedTickCount !== currentTickCount) {
-            this._lastProcessedTickCount = currentTickCount;
-
-            if (!lastTickIsWin) {
-              // Paper loss — use the SCANNER's real streak count (more accurate than our counter)
-              this.virtualLossCount = Math.max(this.virtualLossCount || 0, scannerLossStreak);
-              if (this.virtualLossCount > requiredVirtualLosses) {
-                toast(`📉 Virtual Losses: ${this.virtualLossCount} (Waiting for confirmation tick)`, { icon: '🛑', id: 'virtual-loss' });
-              } else {
-                toast(`📉 Virtual Loss ${this.virtualLossCount}/${requiredVirtualLosses}`, { icon: '📉', id: 'virtual-loss' });
-              }
-              this._virtualConfirmationPending = false;
-            } else {
-              // Paper win tick
-              if (this.virtualLossCount >= requiredVirtualLosses) {
-                // Threshold already met AND we just got a confirmation win! 
-                this._virtualConfirmationPending = true;
-              } else {
-                // Win before threshold was met — the market isn't exhausted yet, keep waiting
-                // DON'T fully reset — use the scanner's real streak which is 0 now
-                this.virtualLossCount = 0;
-                this._virtualConfirmationPending = false;
-              }
-            }
-          }
-
-          // Gate: haven't hit threshold yet
-          if (this.virtualLossCount < requiredVirtualLosses) {
-            this.updateStatus(`📊 Paper Trading: ${this.virtualLossCount}/${requiredVirtualLosses} virtual losses (${chosenDirection} on ${MARKET_LABELS[this.activeMarket]})`);
-            this._scheduleNext(1000);
-            return;
-          }
-
-          // Gate: threshold met but waiting for confirmation win tick
           if (!this._virtualConfirmationPending) {
             this.updateStatus(`🎯 Threshold met! Waiting for confirmation ${chosenDirection} tick...`);
             this._scheduleNext(1000);
