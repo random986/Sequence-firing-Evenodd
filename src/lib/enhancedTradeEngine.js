@@ -1022,11 +1022,9 @@ class EnhancedTradeEngine {
 
       // ═══ GLOBAL OMNI-SCANNER & DUAL-SIDED VIRTUAL LOSS ═══
       // Scan ALL markets simultaneously for the absolute best setup.
-      const activeSubStrategy = this.strategy === 'BOTH5' ? 'BOTH5' : 'EVEN/ODD';
       const baseVirtualLosses = this.config.virtualLossesToWait !== undefined ? this.config.virtualLossesToWait : 3;
       const consecutiveRealLosses = this.channels.SINGLE.consecutiveLosses || 0;
       const requiredVirtualLosses = baseVirtualLosses + consecutiveRealLosses;
-      const minConf = this.config.minConfidence || 65;
 
       // Track consecutive directions to prevent "siding"
       if (!this._lastDirections) this._lastDirections = [];
