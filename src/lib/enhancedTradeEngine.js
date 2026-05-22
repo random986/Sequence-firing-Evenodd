@@ -169,6 +169,11 @@ class EnhancedTradeEngine {
     this.nextAllowedTradeTime = 0;
     this.sessionStartedAt = Date.now();
 
+    // Stealth Mode Resets
+    this.tradesSinceLastGhostBreak = 0;
+    this.nextGhostBreakTarget = Math.floor(Math.random() * 10) + 15; // 15 to 24 trades
+    this.ghostBreakUntil = 0;
+
     // DIFF Strategy Resets
     this.currentAutoDigit = null;
     this.winsSinceDigitChange = 0;
@@ -586,7 +591,18 @@ class EnhancedTradeEngine {
     const spec = CONTRACT_MAP[direction];
     if (!spec) return;
 
-    const cleanStake = Number(Number(stake).toFixed(2));
+    // Stealth: Stake Jittering
+    let jitteredStake = stake;
+    // Add -$0.01 to +$0.02 jitter to obscure mathematical sequences
+    const jitter = (Math.random() * 0.03) - 0.01;
+    jitteredStake = Number((stake + jitter).toFixed(2));
+    if (jitteredStake < 0.35) jitteredStake = 0.35; // Strict deriv minimum
+
+    const cleanStake = jitteredStake;
+
+    // Stealth: Artificial Reaction Delay (200ms - 800ms)
+    const reactionDelay = Math.floor(Math.random() * 600) + 200;
+    await new Promise(r => setTimeout(r, reactionDelay));
 
     const proposalPayload = {
       proposal: 1,
@@ -742,8 +758,10 @@ class EnhancedTradeEngine {
             this.sendLog(`⚠️ Market ${MARKET_LABELS[market] || market} quarantined for 90s after 2 consecutive losses.`);
           }
         }
-        this.pauseTicksRemaining = 15; // Cooldown after loss: wait 15 ticks (~30s) before next entry
-        this.sendLog(`⏱️ Cooldown after loss: Pausing entry for next 15 ticks.`);
+        // Stealth: Randomized Cooldown
+        const randomTicks = Math.floor(Math.random() * 10) + 12; // 12 to 21 ticks
+        this.pauseTicksRemaining = randomTicks; 
+        this.sendLog(`⏱️ Cooldown after loss: Pausing entry for next ${randomTicks} ticks (Stealth).`);
       }
       riskManager.recordResult(direction, won, profit);
     } else if (this.strategy === 'MATCH_DIFF') {
@@ -771,14 +789,40 @@ class EnhancedTradeEngine {
           this.matchDiffStakeStep = 0; // next stake = base
         }
 
-        this.pauseTicksRemaining = 15;
-        this.sendLog(`⏱️ Cooldown after loss: Pausing entry for next 15 ticks.`);
+        // Stealth: Randomized Cooldown
+        const randomTicks = Math.floor(Math.random() * 10) + 12;
+        this.pauseTicksRemaining = randomTicks;
+        this.sendLog(`⏱️ Cooldown after loss: Pausing entry for next ${randomTicks} ticks (Stealth).`);
       }
       riskManager.recordResult(direction, won, profit);
     } else {
+      // General BOTH, BOTH5, SINGLE channels
+      if (won) {
+        if (channelKey === 'SINGLE') this.sessionConsecutiveLosses = 0;
+        if (mStats) mStats.consecutiveLosses = 0;
+        this.matchDiffStakeStep = 0; // Return to base stake
+      } else {
+        this.sessionConsecutiveLosses++;
+        if (mStats) {
+          mStats.consecutiveLosses++;
+        }
+      }
       // Legacy strategy statistics recording
       riskManager.recordResult(direction, won, profit);
     }
+
+    // Stealth: Ghost Session Trigger
+    this.tradesSinceLastGhostBreak++;
+    if (this.tradesSinceLastGhostBreak >= this.nextGhostBreakTarget) {
+      const breakDuration = Math.floor(Math.random() * 120000) + 60000; // 1 to 3 minutes
+      this.ghostBreakUntil = Date.now() + breakDuration;
+      this.tradesSinceLastGhostBreak = 0;
+      this.nextGhostBreakTarget = Math.floor(Math.random() * 10) + 15; // 15 to 24 trades
+      this.sendLog(`👻 Ghost Session: Simulating human break for ${Math.floor(breakDuration/1000)}s`);
+    }
+
+    // Refresh UI
+    if (this.onTradeUpdate) this.onTradeUpdate();
 
     // Extract the exact exit digit using strict string parsing to avoid float truncation bugs
     let finalDigit = '-';
@@ -1019,6 +1063,20 @@ class EnhancedTradeEngine {
       const oddPct = parseFloat(scores.oddPct) || 0;
 
       const activeSubStrategy = this.strategy === 'BOTH5' ? 'BOTH5' : 'EVEN/ODD';
+
+      // Stealth: Ghost Break Check
+      if (this.ghostBreakUntil > Date.now()) {
+        const remainingStr = Math.ceil((this.ghostBreakUntil - Date.now()) / 1000);
+        this.updateStatus(`👻 Stealth Break... (Resuming in ${remainingStr}s)`);
+        
+        // Obfuscation: Send a dummy ping request occasionally while waiting
+        if (Math.random() < 0.1) {
+          derivWS.send({ ping: 1 }).catch(()=>{});
+        }
+        
+        this._scheduleNext(1000);
+        return;
+      }
 
       // ═══ GLOBAL OMNI-SCANNER & DUAL-SIDED VIRTUAL LOSS ═══
       // Scan ALL markets simultaneously for the absolute best setup.
