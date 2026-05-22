@@ -90,33 +90,51 @@ export default function Settings() {
               <Activity size={18} color="var(--cyan)" />
               Algorithmic Strategy
             </h2>
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <button
-                onClick={() => config.updateConfig({ strategy: 'BOTH5' })}
+                onClick={() => config.updateConfig({ strategy: 'OMNI_SNIPER' })}
                 style={{
-                  flex: 1, padding: '16px', borderRadius: 8, cursor: 'pointer',
-                  border: config.strategy === 'BOTH5' ? '2px solid var(--cyan)' : '1px solid var(--border)',
-                  background: config.strategy === 'BOTH5' ? 'rgba(0, 229, 255, 0.05)' : 'transparent',
-                  color: config.strategy === 'BOTH5' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  textAlign: 'left'
+                  padding: '16px', borderRadius: 8, cursor: 'pointer',
+                  border: config.strategy === 'OMNI_SNIPER' ? '2px solid var(--cyan)' : '1px solid var(--border)',
+                  background: config.strategy === 'OMNI_SNIPER' ? 'rgba(0, 229, 255, 0.05)' : 'transparent',
+                  color: config.strategy === 'OMNI_SNIPER' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  textAlign: 'left',
+                  boxShadow: config.strategy === 'OMNI_SNIPER' ? '0 0 15px rgba(0, 255, 255, 0.2)' : 'none'
                 }}
               >
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: config.strategy === 'BOTH5' ? 'var(--text-primary)' : 'inherit' }}>Over/Under 5</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Hedges &gt;5 and &lt;5 digits simultaneously. Excludes 5.</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, marginBottom: 4, color: config.strategy === 'OMNI_SNIPER' ? 'var(--cyan)' : 'inherit' }}>
+                  🚀 OMNI SNIPER (Recommended)
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Dynamically evaluates both Even/Odd and Over/Under 5 simultaneously. Fires the best aligned trend.</div>
               </button>
-              <button
-                onClick={() => config.updateConfig({ strategy: 'BOTH' })}
-                style={{
-                  flex: 1, padding: '16px', borderRadius: 8, cursor: 'pointer',
-                  border: config.strategy === 'BOTH' ? '2px solid var(--cyan)' : '1px solid var(--border)',
-                  background: config.strategy === 'BOTH' ? 'rgba(0, 229, 255, 0.05)' : 'transparent',
-                  color: config.strategy === 'BOTH' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  textAlign: 'left'
-                }}
-              >
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: config.strategy === 'BOTH' ? 'var(--text-primary)' : 'inherit' }}>Even/Odd</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Hedges Even and Odd digits simultaneously.</div>
-              </button>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  onClick={() => config.updateConfig({ strategy: 'BOTH5' })}
+                  style={{
+                    flex: 1, padding: '16px', borderRadius: 8, cursor: 'pointer',
+                    border: config.strategy === 'BOTH5' ? '2px solid var(--cyan)' : '1px solid var(--border)',
+                    background: config.strategy === 'BOTH5' ? 'rgba(0, 229, 255, 0.05)' : 'transparent',
+                    color: config.strategy === 'BOTH5' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    textAlign: 'left'
+                  }}
+                >
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: config.strategy === 'BOTH5' ? 'var(--text-primary)' : 'inherit' }}>Over/Under 5</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Trades &gt;5 and &lt;5 digits based on trend.</div>
+                </button>
+                <button
+                  onClick={() => config.updateConfig({ strategy: 'BOTH' })}
+                  style={{
+                    flex: 1, padding: '16px', borderRadius: 8, cursor: 'pointer',
+                    border: config.strategy === 'BOTH' ? '2px solid var(--cyan)' : '1px solid var(--border)',
+                    background: config.strategy === 'BOTH' ? 'rgba(0, 229, 255, 0.05)' : 'transparent',
+                    color: config.strategy === 'BOTH' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    textAlign: 'left'
+                  }}
+                >
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: config.strategy === 'BOTH' ? 'var(--text-primary)' : 'inherit' }}>Even/Odd</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Trades Even and Odd digits based on trend.</div>
+                </button>
+              </div>
             </div>
           </div>
 

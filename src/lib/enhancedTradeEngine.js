@@ -779,6 +779,16 @@ class EnhancedTradeEngine {
       riskManager.recordResult(direction, won, profit);
     }
 
+    // Extract the exact exit digit using strict string parsing to avoid float truncation bugs
+    let finalDigit = '-';
+    const rawExit = contract.exit_tick_display_value || contract.sell_spot_display_value;
+    if (rawExit) {
+      finalDigit = String(rawExit).slice(-1);
+    } else {
+      const rawNum = contract.exit_tick || contract.sell_spot;
+      if (rawNum) finalDigit = String(rawNum).slice(-1); // less reliable if trailing zero is truncated, but best fallback
+    }
+
     const trade = {
       id: cid,
       direction,
@@ -786,7 +796,7 @@ class EnhancedTradeEngine {
       stake: buyPrice,
       profit,
       won,
-      exitTick: contract.exit_tick_display_value || contract.sell_spot_display_value || contract.exit_tick || contract.sell_spot || contract.current_spot_display_value || contract.current_spot || '',
+      exitTick: finalDigit, // Store just the digit
       barrier: contract.barrier || '',
       time: Date.now(),
       pending: false,
@@ -999,36 +1009,56 @@ class EnhancedTradeEngine {
         return;
       }
 
-      // Even/Odd or Over/Under 5
+      // ═══ STRATEGY EVALUATION (OMNI_SNIPER, BOTH5, EVEN/ODD) ═══
       const minConf = this.config.minConfidence || 65;
       
-      // ═══ SHORT-TERM (25-tick) DIRECTION ═══
-      let stDominantPct, stDominantDir, stWeakerDir;
-      
-      if (this.strategy === 'BOTH5') {
-        const overPct = parseFloat(scores.overPct) || 0;
-        const underPct = parseFloat(scores.underPct) || 0;
-        stDominantPct = Math.max(overPct, underPct);
-        stDominantDir = overPct > underPct ? 'OVER5' : 'UNDER5';
-        stWeakerDir = overPct > underPct ? 'UNDER5' : 'OVER5';
-      } else {
-        const evenPct = parseFloat(scores.evenPct) || 0;
-        const oddPct = parseFloat(scores.oddPct) || 0;
-        stDominantPct = Math.max(evenPct, oddPct);
-        stDominantDir = evenPct > oddPct ? 'EVEN' : 'ODD';
-        stWeakerDir = evenPct > oddPct ? 'ODD' : 'EVEN';
-      }
+      const overPct = parseFloat(scores.overPct) || 0;
+      const underPct = parseFloat(scores.underPct) || 0;
+      const evenPct = parseFloat(scores.evenPct) || 0;
+      const oddPct = parseFloat(scores.oddPct) || 0;
 
-      // ═══ LONG-TERM (100-tick) DIRECTION ═══
-      let ltDominantDir;
-      if (this.strategy === 'BOTH5') {
-        const ltOver = parseFloat(scores.ltOverPct) || 0;
-        const ltUnder = parseFloat(scores.ltUnderPct) || 0;
-        ltDominantDir = ltOver > ltUnder ? 'OVER5' : 'UNDER5';
+      const ltOverPct = parseFloat(scores.ltOverPct) || 0;
+      const ltUnderPct = parseFloat(scores.ltUnderPct) || 0;
+      const ltEvenPct = parseFloat(scores.ltEvenPct) || 0;
+      const ltOddPct = parseFloat(scores.ltOddPct) || 0;
+
+      // Calculate directions
+      const stOuDir = overPct > underPct ? 'OVER5' : 'UNDER5';
+      const ltOuDir = ltOverPct > ltUnderPct ? 'OVER5' : 'UNDER5';
+      const ouConf = Math.max(overPct, underPct);
+      const ouAligned = stOuDir === ltOuDir;
+
+      const stEoDir = evenPct > oddPct ? 'EVEN' : 'ODD';
+      const ltEoDir = ltEvenPct > ltOddPct ? 'EVEN' : 'ODD';
+      const eoConf = Math.max(evenPct, oddPct);
+      const eoAligned = stEoDir === ltEoDir;
+
+      let stDominantPct = 0;
+      let stDominantDir = null;
+      let ltDominantDir = null;
+      let activeSubStrategy = null;
+
+      if (this.strategy === 'OMNI_SNIPER') {
+        // Evaluate both and pick the best aligned one
+        if (ouAligned && eoAligned) {
+          if (ouConf >= eoConf) {
+            stDominantPct = ouConf; stDominantDir = stOuDir; ltDominantDir = ltOuDir; activeSubStrategy = 'BOTH5';
+          } else {
+            stDominantPct = eoConf; stDominantDir = stEoDir; ltDominantDir = ltEoDir; activeSubStrategy = 'EVEN/ODD';
+          }
+        } else if (ouAligned) {
+          stDominantPct = ouConf; stDominantDir = stOuDir; ltDominantDir = ltOuDir; activeSubStrategy = 'BOTH5';
+        } else if (eoAligned) {
+          stDominantPct = eoConf; stDominantDir = stEoDir; ltDominantDir = ltEoDir; activeSubStrategy = 'EVEN/ODD';
+        } else {
+          // Neither aligned, just default to OU for the mismatch gate to catch it
+          stDominantPct = ouConf; stDominantDir = stOuDir; ltDominantDir = ltOuDir; activeSubStrategy = 'BOTH5';
+        }
+      } else if (this.strategy === 'BOTH5') {
+        stDominantPct = ouConf; stDominantDir = stOuDir; ltDominantDir = ltOuDir; activeSubStrategy = 'BOTH5';
       } else {
-        const ltEven = parseFloat(scores.ltEvenPct) || 0;
-        const ltOdd = parseFloat(scores.ltOddPct) || 0;
-        ltDominantDir = ltEven > ltOdd ? 'EVEN' : 'ODD';
+        // EVEN/ODD
+        stDominantPct = eoConf; stDominantDir = stEoDir; ltDominantDir = ltEoDir; activeSubStrategy = 'EVEN/ODD';
       }
 
       // ═══ DUAL-TIMEFRAME ALIGNMENT GATE ═══
@@ -1066,7 +1096,10 @@ class EnhancedTradeEngine {
           if (this.onMarketSwitch) this.onMarketSwitch(this.activeMarket);
           // Re-read the new market's dominant direction
           const newScores = scanner.scores[this.activeMarket];
-          if (this.strategy === 'BOTH5') {
+          if (this.strategy === 'OMNI_SNIPER') {
+            // Just let it re-evaluate fully on the next tick
+            chosenDirection = 'EVEN'; 
+          } else if (this.strategy === 'BOTH5') {
             const op = parseFloat(newScores?.overPct) || 0;
             const up = parseFloat(newScores?.underPct) || 0;
             chosenDirection = op > up ? 'OVER5' : 'UNDER5';
@@ -1121,9 +1154,16 @@ class EnhancedTradeEngine {
         if (ticks.length > 0) {
           const lastTick = ticks[ticks.length - 1];
           
+          // Reset virtual loss state if the bot changed its mind about direction
+          if (this._lastVirtualDirection !== chosenDirection) {
+            this.virtualLossCount = 0;
+            this._virtualConfirmationPending = false;
+            this._lastVirtualDirection = chosenDirection;
+          }
+
           // Determine if the LAST tick would be a win for our chosen direction
           let lastTickIsWin = false;
-          if (this.strategy === 'BOTH5') {
+          if (activeSubStrategy === 'BOTH5') {
             lastTickIsWin = chosenDirection === 'OVER5' ? lastTick > 5 : lastTick < 5;
           } else {
             lastTickIsWin = chosenDirection === 'EVEN' ? lastTick % 2 === 0 : lastTick % 2 !== 0;
@@ -1131,7 +1171,7 @@ class EnhancedTradeEngine {
 
           // Get the scanner's consecutive-loss-streak for our chosen direction
           let scannerLossStreak = 0;
-          if (this.strategy === 'BOTH5') {
+          if (activeSubStrategy === 'BOTH5') {
             scannerLossStreak = chosenDirection === 'OVER5' ? (scores.recentOverLosses || 0) : (scores.recentUnderLosses || 0);
           } else {
             scannerLossStreak = chosenDirection === 'EVEN' ? (scores.recentEvenLosses || 0) : (scores.recentOddLosses || 0);
