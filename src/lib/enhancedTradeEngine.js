@@ -1071,6 +1071,43 @@ class EnhancedTradeEngine {
         return;
       }
 
+      // ═══ SNIPER ENTRY LOGIC (PREVENT 4+ LOSSES) ═══
+      // Even if overall % is high, we must wait for actual tick confirmation to avoid firing into a sudden reversal.
+      const ticks = scanner.buffers[this.activeMarket] || [];
+      if (ticks.length >= 2) {
+        const lastTick = ticks[ticks.length - 1];
+        const prevTick = ticks[ticks.length - 2];
+        const losses = this.channels.SINGLE.consecutiveLosses || 0;
+        
+        let confirmCount = 0;
+        if (this.strategy === 'BOTH5') {
+          const isOver = (val) => val > 5; // OVER5
+          const isUnder = (val) => val < 5; // UNDER5
+          const check = chosenDirection === 'OVER5' ? isOver : isUnder;
+          if (check(lastTick)) confirmCount++;
+          if (check(prevTick)) confirmCount++;
+        } else {
+          const isEven = (val) => val % 2 === 0;
+          const isOdd = (val) => val % 2 !== 0;
+          const check = chosenDirection === 'EVEN' ? isEven : isOdd;
+          if (check(lastTick)) confirmCount++;
+          if (check(prevTick)) confirmCount++;
+        }
+
+        // Base requirement: Last tick MUST match our direction.
+        let requiredConfirmations = 1;
+        // Deep recovery requirement: If we lost 2+ times, require the last TWO ticks to match (strong momentum confirmation)
+        if (losses >= 2) {
+           requiredConfirmations = 2;
+        }
+
+        if (confirmCount < requiredConfirmations) {
+           this.updateStatus(`Sniper: Waiting for ${requiredConfirmations}x ${chosenDirection} tick...`);
+           this._scheduleNext(1000);
+           return;
+        }
+      }
+
       this.sendLog(`📊 Signal: ${chosenDirection} (${dominantPct.toFixed(0)}% dominant on ${MARKET_LABELS[this.activeMarket]})`);
       this.updateStatus('Executing');
       this._placeTrade('SINGLE', chosenDirection, this.channels.SINGLE.stake || this.config.baseStake);
