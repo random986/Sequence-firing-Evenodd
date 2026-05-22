@@ -991,7 +991,12 @@ class EnhancedTradeEngine {
         }
 
         let finalTarget;
-indexed[1] : indexed[0]).digit.toString();
+        if (!userDigit || userDigit === 'AUTO') {
+          const winsThreshold = this.config.diffWinsToChangeDigit || 5;
+          if (this.currentAutoDigit === null || this.winsSinceDigitChange >= winsThreshold) {
+            const indexed = scores.freq.map((f, d) => ({ digit: d, freq: f }));
+            indexed.sort((a, b) => a.freq - b.freq);
+            this.currentAutoDigit = (indexed.length >= 2 ? indexed[1] : indexed[0]).digit.toString();
             this.winsSinceDigitChange = 0;
           }
           finalTarget = this.currentAutoDigit;
