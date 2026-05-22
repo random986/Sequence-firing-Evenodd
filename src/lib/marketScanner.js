@@ -33,11 +33,13 @@ class MarketScanner {
     this.buffers = {};     // symbol -> digit array
     this.scores = {};      // symbol -> analysis object
     this.pipSizes = {};    // symbol -> pip size
+    this.tickCounts = {};  // symbol -> total ticks received
     this.onUpdate = null;  // callback when scores change
     MARKETS.forEach(sym => {
       this.buffers[sym] = [];
       this.scores[sym] = this._emptyScore();
       this.pipSizes[sym] = 3; // Default fallback
+      this.tickCounts[sym] = 0;
     });
   }
 
@@ -53,6 +55,8 @@ class MarketScanner {
     const buf = this.buffers[symbol];
     buf.push(digit);
     if (buf.length > BUFFER_SIZE) buf.shift();
+    
+    this.tickCounts[symbol]++;
 
     // Recalculate scores for this market
     this.scores[symbol] = this._analyze(buf);

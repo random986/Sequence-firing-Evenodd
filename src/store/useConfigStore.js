@@ -32,6 +32,7 @@ const defaults = {
   minConfidence: 60,           // don't trade below this signal strength
   theme: 'dark',               // 'light' or 'dark'
   autoSwitchMarkets: true,     // Switch market after loss
+  virtualLossesToWait: 3,      // Wait for X virtual losses before entering
 };
 
 const useConfigStore = create((set, get) => ({

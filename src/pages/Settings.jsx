@@ -244,6 +244,11 @@ export default function Settings() {
             )}
 
             <SliderInput
+              label="Virtual Losses to Wait (Sniper Entry)" value={config.virtualLossesToWait !== undefined ? config.virtualLossesToWait : 3} unit="losses"
+              onChange={(v) => config.updateConfig({ virtualLossesToWait: v })}
+              min={0} max={10} step={1}
+            />
+            <SliderInput
               label="Trade Cooldown" value={(config.cooldownMs || 3000) / 1000} unit="sec"
               onChange={(v) => config.updateConfig({ cooldownMs: Math.round(v * 1000) })}
               min={1} max={10} step={0.5}

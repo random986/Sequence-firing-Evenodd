@@ -159,6 +159,7 @@ class EnhancedTradeEngine {
 
     this.stakeMultiplier = 1.0;
     this.sessionConsecutiveLosses = 0;
+    this.virtualLossCount = 0;
     this.momentumTradesRemaining = 0;
     this.defensiveWins = 0;
     this.isDefensiveMode = false;
@@ -1071,40 +1072,48 @@ class EnhancedTradeEngine {
         return;
       }
 
-      // ═══ SNIPER ENTRY LOGIC (PREVENT 4+ LOSSES) ═══
-      // Even if overall % is high, we must wait for actual tick confirmation to avoid firing into a sudden reversal.
-      const ticks = scanner.buffers[this.activeMarket] || [];
-      if (ticks.length >= 2) {
-        const lastTick = ticks[ticks.length - 1];
-        const prevTick = ticks[ticks.length - 2];
-        const losses = this.channels.SINGLE.consecutiveLosses || 0;
+      // ═══ VIRTUAL LOSS WAITER (PAPER TRADING) ═══
+      const requiredVirtualLosses = this.config.virtualLossesToWait !== undefined ? this.config.virtualLossesToWait : 3;
+      
+      if (requiredVirtualLosses > 0) {
+        const ticks = scanner.buffers[this.activeMarket] || [];
+        const currentTickCount = scanner.tickCounts[this.activeMarket] || 0;
         
-        let confirmCount = 0;
-        if (this.strategy === 'BOTH5') {
-          const isOver = (val) => val > 5; // OVER5
-          const isUnder = (val) => val < 5; // UNDER5
-          const check = chosenDirection === 'OVER5' ? isOver : isUnder;
-          if (check(lastTick)) confirmCount++;
-          if (check(prevTick)) confirmCount++;
-        } else {
-          const isEven = (val) => val % 2 === 0;
-          const isOdd = (val) => val % 2 !== 0;
-          const check = chosenDirection === 'EVEN' ? isEven : isOdd;
-          if (check(lastTick)) confirmCount++;
-          if (check(prevTick)) confirmCount++;
-        }
+        if (ticks.length > 0) {
+          const lastTick = ticks[ticks.length - 1];
+          let isWin = false;
+          
+          if (this.strategy === 'BOTH5') {
+            isWin = chosenDirection === 'OVER5' ? lastTick > 5 : lastTick < 5;
+          } else {
+            isWin = chosenDirection === 'EVEN' ? lastTick % 2 === 0 : lastTick % 2 !== 0;
+          }
 
-        // Base requirement: Last tick MUST match our direction.
-        let requiredConfirmations = 1;
-        // Deep recovery requirement: If we lost 2+ times, require the last TWO ticks to match (strong momentum confirmation)
-        if (losses >= 2) {
-           requiredConfirmations = 2;
-        }
+          // Evaluate the latest tick if it's new
+          if (this._lastProcessedTickCount !== currentTickCount) {
+             this._lastProcessedTickCount = currentTickCount;
+             
+             if (isWin) {
+                // If the strategy would have won on paper, reset the virtual loss counter (streak broken)
+                if (this.virtualLossCount > 0) {
+                  this.virtualLossCount = 0;
+                }
+             } else {
+                // The strategy would have lost on paper. Increment our virtual loss counter.
+                this.virtualLossCount = (this.virtualLossCount || 0) + 1;
+                toast(`Virtual Loss ${this.virtualLossCount}/${requiredVirtualLosses}`, { icon: '📉', id: 'virtual-loss' });
+             }
+          }
 
-        if (confirmCount < requiredConfirmations) {
-           this.updateStatus(`Sniper: Waiting for ${requiredConfirmations}x ${chosenDirection} tick...`);
-           this._scheduleNext(1000);
-           return;
+          if (this.virtualLossCount < requiredVirtualLosses) {
+             this.updateStatus(`Paper Trading: Waiting for ${requiredVirtualLosses} virtual losses (Currently: ${this.virtualLossCount})`);
+             this._scheduleNext(1000);
+             return;
+          }
+          
+          // Threshold met! Reset and fire.
+          this.virtualLossCount = 0;
+          toast(`Virtual Threshold Met! Firing Real Trade!`, { icon: '🔥', id: 'virtual-loss' });
         }
       }
 
