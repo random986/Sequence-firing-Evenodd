@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import useTradeStore from '../store/useTradeStore';
 import { MARKET_LABELS } from '../lib/marketScanner';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Timer } from 'lucide-react';
+import enhancedTradeEngine from '../lib/enhancedTradeEngine';
 
 function formatTimeElapsed(ms) {
   if (ms < 1000) return 'Just now';
@@ -37,6 +38,28 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
   return (
     <div className="glass flex flex-col h-full" style={{ padding: '14px 20px', overflow: 'hidden' }}>
       
+      {/* Uptime Timer */}
+      {enhancedTradeEngine.sessionStartedAt > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+          marginBottom: 12, borderRadius: 6,
+          background: 'linear-gradient(135deg, rgba(0,229,255,0.08), rgba(0,229,255,0.02))',
+          border: '1px solid rgba(0,229,255,0.15)'
+        }}>
+          <Timer size={14} color="var(--cyan)" />
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Session Uptime</span>
+          <span className="font-data" style={{ fontSize: 15, color: 'var(--cyan)', fontWeight: 700, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+            {(() => {
+              const elapsed = Math.max(0, Math.floor((now - enhancedTradeEngine.sessionStartedAt) / 1000));
+              const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+              const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+              const s = String(elapsed % 60).padStart(2, '0');
+              return `${h}:${m}:${s}`;
+            })()}
+          </span>
+        </div>
+      )}
+
       {/* Header & Stats Summary */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -86,7 +109,7 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 10 }}>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Time', 'Market', 'Type', 'Stake', 'P&L', 'Digit'].map((h, i) => (
+                {['Time', 'Market', 'Type', 'Stake', 'P&L'].map((h, i) => (
                   <th key={h} style={{
                     padding: '12px 6px', textAlign: i >= 3 ? 'right' : 'left',
                     color: 'var(--text-muted)', fontWeight: 600, fontSize: 11,
@@ -126,12 +149,7 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
                   }}>
                     {t.pending ? '...' : `${t.won ? '+' : ''}${t.profit.toFixed(2)}`}
                   </td>
-                  <td className="font-data text-right" style={{
-                    padding: '12px 6px', fontSize: 14, fontWeight: 800,
-                    color: t.pending ? 'var(--text-muted)' : (t.won ? 'var(--success)' : 'var(--crimson)'),
-                  }}>
-                    {t.pending ? '...' : (t.exitTick ? String(t.exitTick).slice(-1) : '-')}
-                  </td>
+
                 </tr>
               ))}
             </tbody>
