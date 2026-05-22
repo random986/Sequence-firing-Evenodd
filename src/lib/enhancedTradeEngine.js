@@ -1020,33 +1020,41 @@ class EnhancedTradeEngine {
       }
 
       // ═══ LONG-TERM (100-tick) DIRECTION ═══
-      let ltDominantDir;
+      let ltDominantDir, ltDominantPct;
       if (this.strategy === 'BOTH5') {
         const ltOver = parseFloat(scores.ltOverPct) || 0;
         const ltUnder = parseFloat(scores.ltUnderPct) || 0;
+        ltDominantPct = Math.max(ltOver, ltUnder);
         ltDominantDir = ltOver > ltUnder ? 'OVER5' : 'UNDER5';
       } else {
         const ltEven = parseFloat(scores.ltEvenPct) || 0;
         const ltOdd = parseFloat(scores.ltOddPct) || 0;
+        ltDominantPct = Math.max(ltEven, ltOdd);
         ltDominantDir = ltEven > ltOdd ? 'EVEN' : 'ODD';
       }
 
-      // ═══ DUAL-TIMEFRAME ALIGNMENT GATE ═══
-      // REFUSE to trade if short-term and long-term disagree — it's a choppy fakeout
-      if (stDominantDir !== ltDominantDir) {
-        this.updateStatus(`⏸ Trend Mismatch: ST=${stDominantDir} vs LT=${ltDominantDir}. Waiting...`);
-        if (!this._lastMismatchToast || Date.now() - this._lastMismatchToast > 8000) {
-          toast(`Trend mismatch: Short=${stDominantDir}, Long=${ltDominantDir}. Waiting for alignment.`, { icon: '⚠️', id: 'trend-mismatch' });
-          this._lastMismatchToast = Date.now();
+      // ═══ HYPER-STRICT DUAL-TIMEFRAME ALIGNMENT GATE ═══
+      // 1. REFUSE to trade if short-term and long-term disagree.
+      // 2. REFUSE to trade if long-term macro trend is weak (<= 55%).
+      if (stDominantDir !== ltDominantDir || ltDominantPct <= 55) {
+        if (stDominantDir !== ltDominantDir) {
+          this.updateStatus(`⏸ Trend Mismatch: ST=${stDominantDir} vs LT=${ltDominantDir}. Waiting...`);
+          if (!this._lastMismatchToast || Date.now() - this._lastMismatchToast > 8000) {
+            toast(`Trend mismatch: Short=${stDominantDir}, Long=${ltDominantDir}. Waiting for alignment.`, { icon: '⚠️', id: 'trend-mismatch' });
+            this._lastMismatchToast = Date.now();
+          }
+        } else {
+          this.updateStatus(`⏸ Weak Macro Trend: ${ltDominantPct.toFixed(0)}% <= 55%. Waiting...`);
         }
-        // Reset virtual loss count when trend flips — old data is stale
+        
+        // Reset virtual loss count when trend flips or is weak
         this.virtualLossCount = 0;
-        this._virtualConfirmationPending = false;
+        this._virtualConfirmationsCount = 0;
         this._scheduleNext(1500);
         return;
       }
 
-      // Both timeframes agree — this is our chosen direction
+      // Both timeframes strictly agree and macro trend is strong
       let chosenDirection = stDominantDir;
 
       // ═══ MARKET SWITCH ON CONSECUTIVE LOSSES ═══
@@ -1062,7 +1070,7 @@ class EnhancedTradeEngine {
           this.activeMarket = best.symbol;
           this.channels.SINGLE.consecutiveLosses = 0;
           this.virtualLossCount = 0;
-          this._virtualConfirmationPending = false;
+          this._virtualConfirmationsCount = 0;
           if (this.onMarketSwitch) this.onMarketSwitch(this.activeMarket);
           // Re-read the new market's dominant direction
           const newScores = scanner.scores[this.activeMarket];
@@ -1109,9 +1117,8 @@ class EnhancedTradeEngine {
         return;
       }
 
-      // ═══ VIRTUAL LOSS WAITER (DEEP PAPER TRADING) ═══
-      // Uses the scanner's real consecutive-loss-streak data for the chosen direction.
-      // After the threshold is met, we ALSO require a confirmation win tick before firing.
+      // ═══ HYPER-STRICT VIRTUAL LOSS WAITER (DEEP PAPER TRADING) ═══
+      // After the threshold is met, we require TWO CONSECUTIVE confirmation win ticks.
       const requiredVirtualLosses = this.config.virtualLossesToWait !== undefined ? this.config.virtualLossesToWait : 3;
       
       if (requiredVirtualLosses > 0) {
@@ -1121,7 +1128,6 @@ class EnhancedTradeEngine {
         if (ticks.length > 0) {
           const lastTick = ticks[ticks.length - 1];
           
-          // Determine if the LAST tick would be a win for our chosen direction
           let lastTickIsWin = false;
           if (this.strategy === 'BOTH5') {
             lastTickIsWin = chosenDirection === 'OVER5' ? lastTick > 5 : lastTick < 5;
@@ -1129,7 +1135,6 @@ class EnhancedTradeEngine {
             lastTickIsWin = chosenDirection === 'EVEN' ? lastTick % 2 === 0 : lastTick % 2 !== 0;
           }
 
-          // Get the scanner's consecutive-loss-streak for our chosen direction
           let scannerLossStreak = 0;
           if (this.strategy === 'BOTH5') {
             scannerLossStreak = chosenDirection === 'OVER5' ? (scores.recentOverLosses || 0) : (scores.recentUnderLosses || 0);
@@ -1137,55 +1142,56 @@ class EnhancedTradeEngine {
             scannerLossStreak = chosenDirection === 'EVEN' ? (scores.recentEvenLosses || 0) : (scores.recentOddLosses || 0);
           }
 
-          // Only process new ticks
           if (this._lastProcessedTickCount !== currentTickCount) {
             this._lastProcessedTickCount = currentTickCount;
 
             if (!lastTickIsWin) {
-              // Paper loss — use the SCANNER's real streak count (more accurate than our counter)
+              // Paper loss
               this.virtualLossCount = Math.max(this.virtualLossCount || 0, scannerLossStreak);
-              if (this.virtualLossCount > requiredVirtualLosses) {
-                toast(`📉 Virtual Losses: ${this.virtualLossCount} (Waiting for confirmation tick)`, { icon: '🛑', id: 'virtual-loss' });
+              
+              // If we were waiting for confirmation ticks, a loss breaks the confirmation streak!
+              if (this.virtualLossCount > requiredVirtualLosses && this._virtualConfirmationsCount > 0) {
+                // We saw a win, then a loss! This is CHOP!
+                toast(`🛑 Chop Detected (Win then Loss). Resetting!`, { icon: '🛑', id: 'chop-detect' });
+              } else if (this.virtualLossCount > requiredVirtualLosses) {
+                toast(`🛑 Virtual Losses: ${this.virtualLossCount} (Waiting for 2x confirmation ticks)`, { icon: '🛑', id: 'virtual-loss' });
               } else {
                 toast(`📉 Virtual Loss ${this.virtualLossCount}/${requiredVirtualLosses}`, { icon: '📉', id: 'virtual-loss' });
               }
-              this._virtualConfirmationPending = false;
+              
+              this._virtualConfirmationsCount = 0;
             } else {
               // Paper win tick
               if (this.virtualLossCount >= requiredVirtualLosses) {
-                // Threshold already met AND we just got a confirmation win! 
-                this._virtualConfirmationPending = true;
+                this._virtualConfirmationsCount = (this._virtualConfirmationsCount || 0) + 1;
               } else {
-                // Win before threshold was met — the market isn't exhausted yet, keep waiting
-                // DON'T fully reset — use the scanner's real streak which is 0 now
+                // Win before threshold was met
                 this.virtualLossCount = 0;
-                this._virtualConfirmationPending = false;
+                this._virtualConfirmationsCount = 0;
               }
             }
           }
 
-          // Gate: haven't hit threshold yet
           if (this.virtualLossCount < requiredVirtualLosses) {
             this.updateStatus(`📊 Paper Trading: ${this.virtualLossCount}/${requiredVirtualLosses} virtual losses (${chosenDirection} on ${MARKET_LABELS[this.activeMarket]})`);
             this._scheduleNext(1000);
             return;
           }
 
-          // Gate: threshold met but waiting for confirmation win tick
-          if (!this._virtualConfirmationPending) {
-            this.updateStatus(`🎯 Threshold met! Waiting for confirmation ${chosenDirection} tick...`);
+          if ((this._virtualConfirmationsCount || 0) < 2) {
+            this.updateStatus(`🎯 Threshold met! Waiting for 2 consecutive confirmation wins (Got: ${this._virtualConfirmationsCount || 0}/2)...`);
             this._scheduleNext(1000);
             return;
           }
 
-          // BOTH gates passed: virtual losses exhausted + confirmation tick received
+          // ALL gates passed
           this.virtualLossCount = 0;
-          this._virtualConfirmationPending = false;
-          toast(`🔥 Virtual Threshold + Confirmation! Firing Real Trade!`, { icon: '🔥', id: 'virtual-loss' });
+          this._virtualConfirmationsCount = 0;
+          toast(`🔥 Hyper-Strict Setup Verified! Firing Real Trade!`, { icon: '🔥', id: 'virtual-loss' });
         }
       }
 
-      this.sendLog(`📊 Signal: ${chosenDirection} (ST:${stDominantPct.toFixed(0)}% LT:${ltDominantDir} aligned on ${MARKET_LABELS[this.activeMarket]})`);
+      this.sendLog(`📊 Signal: ${chosenDirection} (ST:${stDominantPct.toFixed(0)}% LT:${ltDominantDir} ${ltDominantPct.toFixed(0)}% aligned on ${MARKET_LABELS[this.activeMarket]})`);
       this.updateStatus('Executing');
       this._placeTrade('SINGLE', chosenDirection, this.channels.SINGLE.stake || this.config.baseStake);
     } else {
