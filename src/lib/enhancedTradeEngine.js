@@ -1144,7 +1144,11 @@ class EnhancedTradeEngine {
             if (!lastTickIsWin) {
               // Paper loss — use the SCANNER's real streak count (more accurate than our counter)
               this.virtualLossCount = Math.max(this.virtualLossCount || 0, scannerLossStreak);
-              toast(`📉 Virtual Loss ${this.virtualLossCount}/${requiredVirtualLosses}`, { icon: '📉', id: 'virtual-loss' });
+              if (this.virtualLossCount > requiredVirtualLosses) {
+                toast(`📉 Virtual Losses: ${this.virtualLossCount} (Waiting for confirmation tick)`, { icon: '🛑', id: 'virtual-loss' });
+              } else {
+                toast(`📉 Virtual Loss ${this.virtualLossCount}/${requiredVirtualLosses}`, { icon: '📉', id: 'virtual-loss' });
+              }
               this._virtualConfirmationPending = false;
             } else {
               // Paper win tick
