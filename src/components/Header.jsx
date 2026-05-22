@@ -143,7 +143,8 @@ export default function Header() {
         MARKETS.forEach(sym => {
           derivWS.send({ ticks_history: sym, end: 'latest', count: 100, style: 'ticks' }).then(res => {
             if (res.history && res.history.prices) {
-              res.history.prices.forEach(p => scanner.addTick(sym, p));
+              const pipSize = res.pip_size;
+              res.history.prices.forEach(p => scanner.addTick(sym, p, pipSize));
             }
           }).catch(err => console.error('History fetch error:', err));
           derivWS.subscribeTicks(sym);
@@ -152,7 +153,7 @@ export default function Header() {
         // Only register the tick handler once
         if (!window.__tickHandlerRegistered) {
           derivWS.on('tick', (msg) => {
-            if (msg.tick) scanner.addTick(msg.tick.symbol, msg.tick.quote);
+            if (msg.tick) scanner.addTick(msg.tick.symbol, msg.tick.quote, msg.tick.pip_size);
           });
           window.__tickHandlerRegistered = true;
         }

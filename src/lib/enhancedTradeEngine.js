@@ -825,7 +825,10 @@ class EnhancedTradeEngine {
 
     channel.active = false;
     channel.contractId = null;
-    if (channelKey === 'SINGLE') channel.direction = null;
+    if (channelKey === 'SINGLE') {
+      channel.lastDirection = channel.direction;
+      channel.direction = null;
+    }
 
     // ═══ MARTINGALE & ANTI-MARTINGALE for ALL STRATEGIES ═══
     if (won) {
@@ -1015,6 +1018,15 @@ class EnhancedTradeEngine {
       }
 
       let chosenDirection = this.config.tradeLogic === 'momentum' ? dominantDir : weakerDir;
+
+      // Smart Sequence Alternation on Loss: Prevent getting stuck in long streaks
+      if (this.channels.SINGLE.consecutiveLosses > 0 && this.channels.SINGLE.lastDirection) {
+        if (this.strategy === 'BOTH5') {
+          chosenDirection = this.channels.SINGLE.lastDirection === 'OVER5' ? 'UNDER5' : 'OVER5';
+        } else if (this.strategy === 'BOTH') {
+          chosenDirection = this.channels.SINGLE.lastDirection === 'EVEN' ? 'ODD' : 'EVEN';
+        }
+      }
 
       if (dominantPct < minConf) {
         if (this.config.autoSwitchMarkets !== false) {

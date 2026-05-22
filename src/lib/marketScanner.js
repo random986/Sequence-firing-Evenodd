@@ -21,10 +21,10 @@ export const MARKET_LABELS = {
 const BUFFER_SIZE = 200;
 const ANALYSIS_WINDOW = 25;
 
-/* ── Extract last digit from tick price ── */
-export function extractDigit(price) {
-  const s = String(price);
-  return parseInt(s[s.length - 1], 10);
+/* ── Extract last digit from tick price using pip_size ── */
+export function extractDigit(price, pipSize = 3) {
+  const formatted = Number(price).toFixed(pipSize);
+  return parseInt(formatted[formatted.length - 1], 10);
 }
 
 /* ── Market Scanner Class ── */
@@ -32,18 +32,24 @@ class MarketScanner {
   constructor() {
     this.buffers = {};     // symbol -> digit array
     this.scores = {};      // symbol -> analysis object
+    this.pipSizes = {};    // symbol -> pip size
     this.onUpdate = null;  // callback when scores change
     MARKETS.forEach(sym => {
       this.buffers[sym] = [];
       this.scores[sym] = this._emptyScore();
+      this.pipSizes[sym] = 3; // Default fallback
     });
   }
 
   /* ── Ingest a tick ── */
-  addTick(symbol, price) {
+  addTick(symbol, price, pipSize = null) {
     if (!this.buffers[symbol]) return;
 
-    const digit = extractDigit(price);
+    if (pipSize !== null) {
+      this.pipSizes[symbol] = pipSize;
+    }
+
+    const digit = extractDigit(price, this.pipSizes[symbol]);
     const buf = this.buffers[symbol];
     buf.push(digit);
     if (buf.length > BUFFER_SIZE) buf.shift();
