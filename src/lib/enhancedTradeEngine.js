@@ -1159,20 +1159,8 @@ class EnhancedTradeEngine {
         }
       }
 
-          if (!this._virtualConfirmationPending) {
-            this.updateStatus(`🎯 Threshold met! Waiting for confirmation ${chosenDirection} tick...`);
-            this._scheduleNext(1000);
-            return;
-          }
 
-          // BOTH gates passed: virtual losses exhausted + confirmation tick received
-          this.virtualLossCount = 0;
-          this._virtualConfirmationPending = false;
-          toast(`🔥 Virtual Threshold + Confirmation! Firing Real Trade!`, { icon: '🔥', id: 'virtual-loss' });
-        }
-      }
-
-      this.sendLog(`📊 Signal: ${chosenDirection} (ST:${stDominantPct.toFixed(0)}% LT:${ltDominantDir} aligned on ${MARKET_LABELS[this.activeMarket]})`);
+      this.sendLog(`📊 Signal: ${chosenDirection} (Conf:${dirConf.toFixed(0)}% on ${MARKET_LABELS[this.activeMarket]})`);
       this.updateStatus('Executing');
       this._placeTrade('SINGLE', chosenDirection, this.channels.SINGLE.stake || this.config.baseStake);
     } else {
