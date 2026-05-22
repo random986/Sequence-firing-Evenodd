@@ -353,24 +353,23 @@ class EnhancedTradeEngine {
         this.stop(`Hard Stop: Balance dropped ${lossPct.toFixed(1)}% below opening (Opening: $${this.sessionOpeningBalance.toFixed(2)}, Current: $${balance.toFixed(2)})`);
         return;
       }
-      if (this.sessionConsecutiveLosses >= 3) {
-        this.stop(`Hard Stop: 3 consecutive session losses.`);
-        return;
-      }
     } else if (this.strategy === 'MATCHES') {
       if (this.sessionOpeningBalance > 0 && balance <= 0.8 * this.sessionOpeningBalance) {
         const lossPct = ((this.sessionOpeningBalance - balance) / this.sessionOpeningBalance) * 100;
         this.stop(`Hard Stop: Balance dropped ${lossPct.toFixed(1)}% below opening (Opening: $${this.sessionOpeningBalance.toFixed(2)}, Current: $${balance.toFixed(2)})`);
         return;
       }
-      if (this.sessionConsecutiveLosses >= 4) {
-        this.stop(`Hard Stop: 4 consecutive session losses.`);
-        return;
-      }
       if (this.sessionTrades.length >= 50) {
         this.stop(`Hard Stop: Max trades limit (50) reached for session.`);
         return;
       }
+    }
+
+    // User-configurable max consecutive loss stop (applies to ALL strategies)
+    const maxLossStreak = this.config.maxLossStreak || 0;
+    if (maxLossStreak > 0 && this.sessionConsecutiveLosses >= maxLossStreak) {
+      this.stop(`Hard Stop: ${this.sessionConsecutiveLosses} consecutive losses reached your limit of ${maxLossStreak}.`);
+      return;
     }
 
     // Global Stop Loss & Take Profit checks

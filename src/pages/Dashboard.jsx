@@ -61,6 +61,31 @@ export default function Dashboard() {
                   }} />
               </button>
             </div>
+            {/* Base Stake Input */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8, paddingRight: 8, borderRight: '1px solid var(--border)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Stake:</span>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 12 }}>$</span>
+                <input
+                  type="number"
+                  value={config.baseStake || ''}
+                  onChange={(e) => config.updateConfig({ baseStake: parseFloat(e.target.value) || 0.35 })}
+                  step={0.01}
+                  min={0.35}
+                  className="font-data"
+                  style={{
+                    background: 'var(--bg-primary)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    padding: '2px 8px 2px 20px',
+                    color: 'var(--text-primary)',
+                    fontSize: 12,
+                    outline: 'none',
+                    width: 60
+                  }}
+                />
+              </div>
+            </div>
 
             {/* Martingale Button */}
             <button
