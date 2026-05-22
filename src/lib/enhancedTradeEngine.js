@@ -1016,15 +1016,30 @@ class EnhancedTradeEngine {
         dominantDir = evenPct > oddPct ? 'EVEN' : 'ODD';
         weakerDir = evenPct > oddPct ? 'ODD' : 'EVEN';
       }
+      // ALWAYS follow the dominant signal — never alternate against the trend
+      let chosenDirection = dominantDir;
 
-      let chosenDirection = this.config.tradeLogic === 'momentum' ? dominantDir : weakerDir;
-
-      // Smart Sequence Alternation on Loss: Prevent getting stuck in long streaks
-      if (this.channels.SINGLE.consecutiveLosses > 0 && this.channels.SINGLE.lastDirection) {
-        if (this.strategy === 'BOTH5') {
-          chosenDirection = this.channels.SINGLE.lastDirection === 'OVER5' ? 'UNDER5' : 'OVER5';
-        } else if (this.strategy === 'BOTH') {
-          chosenDirection = this.channels.SINGLE.lastDirection === 'EVEN' ? 'ODD' : 'EVEN';
+      // On consecutive losses, switch MARKET not direction — the trend on this market is unreliable
+      if (this.channels.SINGLE.consecutiveLosses >= 2 && this.config.autoSwitchMarkets !== false) {
+        const ranked = scanner.getRanked(this.strategy);
+        const best = ranked.find(r => r.symbol !== this.activeMarket);
+        if (best) {
+          const reason = `2 consecutive losses on ${MARKET_LABELS[this.activeMarket]}`;
+          this.sendLog(`🔄 ${reason}. Switching to ${best.label}...`);
+          toast(`${reason}. Moving to ${best.label}`, { icon: '🔄', id: 'market-switch' });
+          this.activeMarket = best.symbol;
+          if (this.onMarketSwitch) this.onMarketSwitch(this.activeMarket);
+          // Re-read the new market's dominant direction
+          const newScores = scanner.scores[this.activeMarket];
+          if (this.strategy === 'BOTH5') {
+            const op = parseFloat(newScores?.overPct) || 0;
+            const up = parseFloat(newScores?.underPct) || 0;
+            chosenDirection = op > up ? 'OVER5' : 'UNDER5';
+          } else {
+            const ep = parseFloat(newScores?.evenPct) || 0;
+            const op2 = parseFloat(newScores?.oddPct) || 0;
+            chosenDirection = ep > op2 ? 'EVEN' : 'ODD';
+          }
         }
       }
 
@@ -1056,6 +1071,7 @@ class EnhancedTradeEngine {
         return;
       }
 
+      this.sendLog(`📊 Signal: ${chosenDirection} (${dominantPct.toFixed(0)}% dominant on ${MARKET_LABELS[this.activeMarket]})`);
       this.updateStatus('Executing');
       this._placeTrade('SINGLE', chosenDirection, this.channels.SINGLE.stake || this.config.baseStake);
     } else {
