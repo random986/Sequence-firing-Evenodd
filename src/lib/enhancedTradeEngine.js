@@ -1138,46 +1138,86 @@ class EnhancedTradeEngine {
       if (!this._lastDirections) this._lastDirections = [];
 
       let bestSetup = null;
-      let maxGlobalStreak = 0;
+      let maxOverStreak = 0;
+      let maxUnderStreak = 0;
+      let maxEvenStreak = 0;
+      let maxOddStreak = 0;
+
+      // Define direction-specific virtual loss requirements to align statistical rarity
+      const reqOver = requiredVirtualLosses;
+      const reqUnder = requiredVirtualLosses + 2;
+      const reqEven = requiredVirtualLosses + 2;
+      const reqOdd = requiredVirtualLosses + 2;
 
       for (const market of MARKETS) {
         // Skip quarantined markets
         if (this.marketStats[market] && this.marketStats[market].quarantinedUntil > Date.now()) continue;
 
         const ticks = scanner.buffers[market] || [];
-        if (ticks.length < requiredVirtualLosses + 1) continue;
+        // Need enough ticks for scanning
+        if (ticks.length < Math.max(reqOver, reqUnder, reqEven, reqOdd) + 1) continue;
 
-        const lastTick = ticks[ticks.length - 1];
-        let evenLossStreak = 0, oddLossStreak = 0, overLossStreak = 0, underLossStreak = 0;
+        // Calculate streaks accurately with explicit breaks (continuous loss streak from the end)
+        let overLossStreak = 0;
+        let underLossStreak = 0;
+        let evenLossStreak = 0;
+        let oddLossStreak = 0;
 
         for (let i = ticks.length - 1; i >= 0; i--) {
           const d = ticks[i];
-          const dist = ticks.length - 1 - i;
-          if (d % 2 !== 0 && evenLossStreak === dist) evenLossStreak++;
-          if (d % 2 === 0 && oddLossStreak === dist) oddLossStreak++;
-          if (d <= 5 && overLossStreak === dist) overLossStreak++;
-          if (d >= 5 && underLossStreak === dist) underLossStreak++;
+          if (d <= 5) overLossStreak++; else break;
         }
+        for (let i = ticks.length - 1; i >= 0; i--) {
+          const d = ticks[i];
+          if (d >= 5) underLossStreak++; else break;
+        }
+        for (let i = ticks.length - 1; i >= 0; i--) {
+          const d = ticks[i];
+          if (d % 2 !== 0) evenLossStreak++; else break;
+        }
+        for (let i = ticks.length - 1; i >= 0; i--) {
+          const d = ticks[i];
+          if (d % 2 === 0) oddLossStreak++; else break;
+        }
+
+        // Track global maximums for UI status
+        maxOverStreak = Math.max(maxOverStreak, overLossStreak);
+        maxUnderStreak = Math.max(maxUnderStreak, underLossStreak);
+        maxEvenStreak = Math.max(maxEvenStreak, evenLossStreak);
+        maxOddStreak = Math.max(maxOddStreak, oddLossStreak);
 
         const scores = scanner.scores[market] || {};
         const setups = [];
 
+        // Perfect Choppiness / Flat Market Filter (reject market if 5 dominates)
+        const d5Pct = parseFloat(scores.d5Pct) || 0;
+        if (d5Pct >= 12.0) {
+          // Reject setups for both OVER5 and UNDER5 on flat markets
+          continue;
+        }
+
         if (activeSubStrategy === 'BOTH5') {
-          if (overLossStreak >= requiredVirtualLosses) {
-            setups.push({ market, direction: 'OVER5', streak: overLossStreak, conf: parseFloat(scores.overPct) || 0 });
+          // Strict Trend-Following Shields
+          const ltOverPct = parseFloat(scores.ltOverPct) || 50;
+          const ltUnderPct = parseFloat(scores.ltUnderPct) || 50;
+
+          if (overLossStreak >= reqOver && ltOverPct >= 50.0) {
+            setups.push({ market, direction: 'OVER5', streak: overLossStreak, required: reqOver, conf: parseFloat(scores.overPct) || 0 });
           }
-          if (underLossStreak >= requiredVirtualLosses) {
-            setups.push({ market, direction: 'UNDER5', streak: underLossStreak, conf: parseFloat(scores.underPct) || 0 });
+          if (underLossStreak >= reqUnder && ltUnderPct >= 50.0) {
+            setups.push({ market, direction: 'UNDER5', streak: underLossStreak, required: reqUnder, conf: parseFloat(scores.underPct) || 0 });
           }
-          maxGlobalStreak = Math.max(maxGlobalStreak, overLossStreak, underLossStreak);
         } else {
-          if (evenLossStreak >= requiredVirtualLosses) {
-            setups.push({ market, direction: 'EVEN', streak: evenLossStreak, conf: parseFloat(scores.evenPct) || 0 });
+          // Strict Trend-Following Shields
+          const ltEvenPct = parseFloat(scores.ltEvenPct) || 50;
+          const ltOddPct = parseFloat(scores.ltOddPct) || 50;
+
+          if (evenLossStreak >= reqEven && ltEvenPct >= 50.0) {
+            setups.push({ market, direction: 'EVEN', streak: evenLossStreak, required: reqEven, conf: parseFloat(scores.evenPct) || 0 });
           }
-          if (oddLossStreak >= requiredVirtualLosses) {
-            setups.push({ market, direction: 'ODD', streak: oddLossStreak, conf: parseFloat(scores.oddPct) || 0 });
+          if (oddLossStreak >= reqOdd && ltOddPct >= 50.0) {
+            setups.push({ market, direction: 'ODD', streak: oddLossStreak, required: reqOdd, conf: parseFloat(scores.oddPct) || 0 });
           }
-          maxGlobalStreak = Math.max(maxGlobalStreak, evenLossStreak, oddLossStreak);
         }
 
         for (const s of setups) {
@@ -1211,24 +1251,32 @@ class EnhancedTradeEngine {
           const netPenalty = Math.max(0, penalty - bonus);
           const effectiveStreak = s.streak - netPenalty;
 
-          if (!bestSetup) {
-            if (effectiveStreak >= requiredVirtualLosses) bestSetup = s;
-          } else {
-            if (effectiveStreak > bestSetup.streak) {
+          if (effectiveStreak >= s.required) {
+            if (!bestSetup) {
               bestSetup = s;
-            } else if (effectiveStreak === bestSetup.streak) {
-              // Tie-breaker Priority 1: Macro Trend Alignment
-              if (s.macroConf > bestSetup.macroConf) {
+            } else {
+              // Tie-breaker Priority 1: Favor OVER5 aggressively above all else
+              const thisIsOver = s.direction === 'OVER5';
+              const bestIsOver = bestSetup.direction === 'OVER5';
+              if (thisIsOver && !bestIsOver) {
                 bestSetup = s;
-              }
-              // Tie-breaker Priority 2: OVER5 preference
-              else if (s.macroConf === bestSetup.macroConf) {
-                if (s.direction === 'OVER5' && bestSetup.direction !== 'OVER5') {
+              } else if (!thisIsOver && bestIsOver) {
+                // Keep bestSetup
+              } else {
+                // Priority 2: Select the setup with the greatest margin over its required streak
+                const thisMargin = s.streak - s.required;
+                const bestMargin = bestSetup.streak - bestSetup.required;
+                if (thisMargin > bestMargin) {
                   bestSetup = s;
-                } else if (s.direction !== 'OVER5' && bestSetup.direction === 'OVER5') {
-                  // keep bestSetup
-                } else if (s.conf > bestSetup.conf) {
-                  bestSetup = s;
+                } else if (thisMargin === bestMargin) {
+                  // Priority 3: Macro Trend Alignment
+                  if (s.macroConf > bestSetup.macroConf) {
+                    bestSetup = s;
+                  } else if (s.macroConf === bestSetup.macroConf) {
+                    if (s.conf > bestSetup.conf) {
+                      bestSetup = s;
+                    }
+                  }
                 }
               }
             }
@@ -1238,13 +1286,30 @@ class EnhancedTradeEngine {
 
       if (!bestSetup) {
         // Show virtual loss scanning status with toast on significant streaks
-        const statusMsg = `📊 Scanning ${MARKETS.length} Markets... (Best Streak: ${maxGlobalStreak} / Need: ${requiredVirtualLosses})`;
+        let statusMsg = '';
+        if (activeSubStrategy === 'BOTH5') {
+          statusMsg = `📊 Scanning ${MARKETS.length} Markets... [OVER5: ${maxOverStreak}/${reqOver} | UNDER5: ${maxUnderStreak}/${reqUnder}]`;
+        } else {
+          statusMsg = `📊 Scanning ${MARKETS.length} Markets... [EVEN: ${maxEvenStreak}/${reqEven} | ODD: ${maxOddStreak}/${reqOdd}]`;
+        }
         this.updateStatus(statusMsg);
 
-        // Toast notification when a market reaches threshold minus 1 (almost ready)
-        if (maxGlobalStreak > 0 && maxGlobalStreak === requiredVirtualLosses - 1) {
+        // Toast notification when any market reaches its threshold minus 1
+        const almostOver = maxOverStreak === reqOver - 1;
+        const almostUnder = maxUnderStreak === reqUnder - 1;
+        const almostEven = maxEvenStreak === reqEven - 1;
+        const almostOdd = maxOddStreak === reqOdd - 1;
+
+        if (almostOver || almostUnder || almostEven || almostOdd) {
           if (!this._lastVlToastTime || Date.now() - this._lastVlToastTime > 5000) {
-            toast(`🔎 Virtual losses at ${maxGlobalStreak}/${requiredVirtualLosses} — one more for entry!`, { icon: '📊', duration: 3000 });
+            let direction = '';
+            let current = 0;
+            let target = 0;
+            if (almostOver) { direction = 'OVER5'; current = maxOverStreak; target = reqOver; }
+            else if (almostUnder) { direction = 'UNDER5'; current = maxUnderStreak; target = reqUnder; }
+            else if (almostEven) { direction = 'EVEN'; current = maxEvenStreak; target = reqEven; }
+            else if (almostOdd) { direction = 'ODD'; current = maxOddStreak; target = reqOdd; }
+            toast(`🔎 Virtual losses for ${direction} at ${current}/${target} — one more for entry!`, { icon: '📊', duration: 3000 });
             this._lastVlToastTime = Date.now();
           }
         }
