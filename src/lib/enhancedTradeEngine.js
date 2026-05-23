@@ -59,6 +59,7 @@ class EnhancedTradeEngine {
     this.sessionTrades = []; // Accumulator for mathematical expectancy
     this.currentStatus = 'Idle';
     this.sessionStartedAt = 0; // Timestamp when bot was started
+    this.sessionEndedAt = 0;   // Timestamp when bot stopped
 
     // Hook up configuration changes
     this._configUpdateListener = () => {
@@ -170,6 +171,7 @@ class EnhancedTradeEngine {
     this.lastTradeTime = 0;
     this.nextAllowedTradeTime = 0;
     this.sessionStartedAt = Date.now();
+    this.sessionEndedAt = 0;
     this._contractLedger = {};  // Reset the overflow ledger
     this._lastVlToastTime = 0;
 
@@ -222,6 +224,7 @@ class EnhancedTradeEngine {
 
   stop(reason) {
     this.running = false;
+    this.sessionEndedAt = Date.now();
     this.updateStatus('Idle');
     this.sendLog(`🛑 BOT STOPPED — Reason: ${reason || 'User stopped'}`);
     if (this._cycleTimer) { clearTimeout(this._cycleTimer); this._cycleTimer = null; }

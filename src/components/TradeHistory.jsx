@@ -71,7 +71,8 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
               <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Uptime</span>
               <span className="font-data" style={{ fontSize: 14, color: 'var(--cyan)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                 {(() => {
-                  const elapsed = Math.max(0, Math.floor((now - enhancedTradeEngine.sessionStartedAt) / 1000));
+                  const endTime = enhancedTradeEngine.sessionEndedAt > 0 ? enhancedTradeEngine.sessionEndedAt : now;
+                  const elapsed = Math.max(0, Math.floor((endTime - enhancedTradeEngine.sessionStartedAt) / 1000));
                   const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
                   const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
                   const s = String(elapsed % 60).padStart(2, '0');
