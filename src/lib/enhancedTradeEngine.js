@@ -821,8 +821,7 @@ class EnhancedTradeEngine {
       this.sendLog(`👻 Ghost Session: Simulating human break for ${Math.floor(breakDuration/1000)}s`);
     }
 
-    // Refresh UI
-    if (this.onTradeUpdate) this.onTradeUpdate();
+    // Refresh UI is handled later with the populated trade object
 
     // Extract the exact exit digit using strict string parsing to avoid float truncation bugs
     let finalDigit = '-';
