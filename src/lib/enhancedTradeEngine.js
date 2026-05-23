@@ -1180,13 +1180,33 @@ class EnhancedTradeEngine {
         for (const s of setups) {
           if (s.conf < minConf) continue;
 
-          // Anti-Siding Logic
+          // 1. Calculate Macro Trend Confidence (Last 100 Ticks)
+          let macroConf = 50;
+          if (s.direction === 'OVER5') macroConf = parseFloat(scores.ltOverPct) || 50;
+          if (s.direction === 'UNDER5') macroConf = parseFloat(scores.ltUnderPct) || 50;
+          if (s.direction === 'EVEN') macroConf = parseFloat(scores.ltEvenPct) || 50;
+          if (s.direction === 'ODD') macroConf = parseFloat(scores.ltOddPct) || 50;
+
+          s.macroConf = macroConf;
+
+          // 2. Anti-Siding & Trend Alignment Penalties
           let penalty = 0;
+          
+          // A. Siding Penalty: Prevent spamming the same direction
           if (this._lastDirections.length >= 2 && this._lastDirections.every(d => d === s.direction)) {
-            penalty = 1;
+            penalty += 1;
           }
 
-          const effectiveStreak = s.streak - penalty;
+          // B. Macro Trend Penalty: If macro trend is strongly against the trade, demand deeper virtual losses
+          if (macroConf < 45) penalty += 1;
+          if (macroConf < 35) penalty += 1; // Cumulative: penalty becomes +2
+
+          // C. Macro Trend Bonus: If macro trend strongly supports trade, we can be more eager (but do not drop below 0 penalty)
+          let bonus = 0;
+          if (macroConf > 55) bonus += 1;
+
+          const netPenalty = Math.max(0, penalty - bonus);
+          const effectiveStreak = s.streak - netPenalty;
 
           if (!bestSetup) {
             if (effectiveStreak >= requiredVirtualLosses) bestSetup = s;
@@ -1194,15 +1214,19 @@ class EnhancedTradeEngine {
             if (effectiveStreak > bestSetup.streak) {
               bestSetup = s;
             } else if (effectiveStreak === bestSetup.streak) {
-              // Priority 1: OVER5 preference
-              if (s.direction === 'OVER5' && bestSetup.direction !== 'OVER5') {
+              // Tie-breaker Priority 1: Macro Trend Alignment
+              if (s.macroConf > bestSetup.macroConf) {
                 bestSetup = s;
-              } else if (bestSetup.direction === 'OVER5' && s.direction !== 'OVER5') {
-                // keep bestSetup
-              } 
-              // Priority 2: Higher confidence
-              else if (s.conf > bestSetup.conf) {
-                bestSetup = s;
+              }
+              // Tie-breaker Priority 2: OVER5 preference
+              else if (s.macroConf === bestSetup.macroConf) {
+                if (s.direction === 'OVER5' && bestSetup.direction !== 'OVER5') {
+                  bestSetup = s;
+                } else if (s.direction !== 'OVER5' && bestSetup.direction === 'OVER5') {
+                  // keep bestSetup
+                } else if (s.conf > bestSetup.conf) {
+                  bestSetup = s;
+                }
               }
             }
           }
