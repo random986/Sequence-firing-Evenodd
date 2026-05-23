@@ -157,11 +157,12 @@ export default function App() {
         <>
           <FloatingDisclaimer />
           <OnboardingGuide />
-          <Toaster position="top-right" toastOptions={{
+          <Toaster position="top-center" toastOptions={{
             style: {
               background: 'var(--bg-card)',
               color: 'var(--text-primary)',
               border: '1px solid var(--border)',
+              maxWidth: '90vw',
             }
           }} />
       <style>{`
