@@ -50,6 +50,8 @@ export default function BotControl() {
         takeProfit: config.takeProfit || 0,
         cooldownMs: config.cooldownMs,
         minConfidence: config.minConfidence,
+        virtualLossesToWait: config.virtualLossesToWait,
+        autoSwitchMarkets: config.autoSwitchMarkets,
       });
       setBotRunning(true);
     }

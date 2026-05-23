@@ -38,27 +38,7 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
   return (
     <div className="glass flex flex-col h-full" style={{ padding: '14px 20px', overflow: 'hidden' }}>
       
-      {/* Uptime Timer */}
-      {enhancedTradeEngine.sessionStartedAt > 0 && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-          marginBottom: 12, borderRadius: 6,
-          background: 'linear-gradient(135deg, rgba(0,229,255,0.08), rgba(0,229,255,0.02))',
-          border: '1px solid rgba(0,229,255,0.15)'
-        }}>
-          <Timer size={14} color="var(--cyan)" />
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Session Uptime</span>
-          <span className="font-data" style={{ fontSize: 15, color: 'var(--cyan)', fontWeight: 700, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
-            {(() => {
-              const elapsed = Math.max(0, Math.floor((now - enhancedTradeEngine.sessionStartedAt) / 1000));
-              const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
-              const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
-              const s = String(elapsed % 60).padStart(2, '0');
-              return `${h}:${m}:${s}`;
-            })()}
-          </span>
-        </div>
-      )}
+      {/* Removed Uptime Timer Card */}
 
       {/* Header & Stats Summary */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
@@ -86,6 +66,20 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
             <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Max Payout</span>
             <span className="font-data" style={{ fontSize: 14, color: 'var(--success)', fontWeight: 700 }}>${maxCashout.toFixed(2)}</span>
           </div>
+          {enhancedTradeEngine.sessionStartedAt > 0 && (
+            <div className="flex flex-col items-end">
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Uptime</span>
+              <span className="font-data" style={{ fontSize: 14, color: 'var(--cyan)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                {(() => {
+                  const elapsed = Math.max(0, Math.floor((now - enhancedTradeEngine.sessionStartedAt) / 1000));
+                  const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+                  const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+                  const s = String(elapsed % 60).padStart(2, '0');
+                  return `${h}:${m}:${s}`;
+                })()}
+              </span>
+            </div>
+          )}
           <button 
             onClick={() => useTradeStore.getState().resetSession()}
             style={{

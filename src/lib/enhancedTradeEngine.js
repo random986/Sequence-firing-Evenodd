@@ -80,6 +80,8 @@ class EnhancedTradeEngine {
     // --- Watchdogs and timers ---
     this._pocHandler = null;
     this._cycleTimer = null;
+    this._contractLedger = {};  // Tracks contracts displaced from channels
+    this._lastVlToastTime = 0;  // Throttle virtual loss toasts
 
     // --- DIFF strategy original states ---
     this.currentAutoDigit = null;
@@ -168,6 +170,8 @@ class EnhancedTradeEngine {
     this.lastTradeTime = 0;
     this.nextAllowedTradeTime = 0;
     this.sessionStartedAt = Date.now();
+    this._contractLedger = {};  // Reset the overflow ledger
+    this._lastVlToastTime = 0;
 
     // Stealth Mode Resets
     this.tradesSinceLastGhostBreak = 0;
@@ -591,6 +595,13 @@ class EnhancedTradeEngine {
     const spec = CONTRACT_MAP[direction];
     if (!spec) return;
 
+    // ▸▸▸ LOCK the channel IMMEDIATELY to prevent double-firing ◂◂◂
+    const channel = this.channels[channelKey];
+    channel.active = true;
+    channel.direction = direction;
+    channel.stake = stake;
+    channel.placedAt = Date.now();
+
     // Stealth: Stake Jittering
     let jitteredStake = stake;
     // Add -$0.01 to +$0.02 jitter to obscure mathematical sequences
@@ -616,12 +627,6 @@ class EnhancedTradeEngine {
     };
     if (dynamicBarrier !== null && dynamicBarrier !== undefined) proposalPayload.barrier = String(dynamicBarrier);
     else if (spec.barrier !== null && spec.barrier !== undefined) proposalPayload.barrier = String(spec.barrier);
-
-    const channel = this.channels[channelKey];
-    channel.active = true;
-    channel.direction = direction;
-    channel.stake = stake;
-    channel.placedAt = Date.now();
 
     const balance = derivWS.accountInfo?.balance || 0;
     if (stake > balance) {
@@ -675,6 +680,13 @@ class EnhancedTradeEngine {
         return;
       }
       if (res.buy) {
+        // If channel already had a contract, save it to the ledger so settlement still works
+        if (channel.contractId && channel.contractId !== res.buy.contract_id) {
+          if (!this._contractLedger) this._contractLedger = {};
+          this._contractLedger[channel.contractId] = {
+            channelKey, direction: channel.direction, stake: channel.stake
+          };
+        }
         channel.contractId = res.buy.contract_id;
         this.sendLog(`✅ Triggered ${channelKey} ${direction} at $${stake.toFixed(2)} | Contract ID: ${channel.contractId}`);
         derivWS.sendRaw({ proposal_open_contract: 1, contract_id: channel.contractId, subscribe: 1 });
@@ -719,6 +731,7 @@ class EnhancedTradeEngine {
     if (!contract || !contract.is_sold) return;
     const cid = contract.contract_id;
 
+    // First try active channels
     let channelKey = null;
     let channel = null;
     for (const key in this.channels) {
@@ -727,6 +740,41 @@ class EnhancedTradeEngine {
         channel = this.channels[key];
         break;
       }
+    }
+
+    // Fallback: check the overflow ledger for contracts that were overwritten
+    if (!channel && this._contractLedger && this._contractLedger[cid]) {
+      const ledgerEntry = this._contractLedger[cid];
+      channelKey = ledgerEntry.channelKey;
+      // Create a virtual channel object for settlement
+      channel = {
+        active: true,
+        contractId: cid,
+        direction: ledgerEntry.direction,
+        stake: ledgerEntry.stake,
+        consecutiveLosses: 0,
+        step: 0,
+      };
+      delete this._contractLedger[cid];
+      // For ledger-recovered contracts, just update trade history and return
+      const won = contract.status === 'won';
+      const profit = parseFloat(contract.profit) || 0;
+      const buyPrice = parseFloat(contract.buy_price) || 0;
+      const market = contract.underlying || this.activeMarket;
+      let finalDigit = '-';
+      const rawExit = contract.exit_tick_display_value || contract.sell_spot_display_value || contract.current_spot_display_value;
+      if (rawExit) finalDigit = String(rawExit).slice(-1);
+      else {
+        const rawNum = contract.exit_tick || contract.sell_spot || contract.current_spot;
+        if (rawNum) finalDigit = String(rawNum).slice(-1);
+      }
+      const trade = {
+        id: cid, direction: ledgerEntry.direction, market, stake: buyPrice, profit, won,
+        exitTick: finalDigit, barrier: contract.barrier || '', time: Date.now(), pending: false,
+      };
+      if (this.onTradeUpdate) this.onTradeUpdate(trade);
+      this.sendLog(`💸 [LEDGER SETTLE] ${won ? '✅ WIN' : '❌ LOSS'} (${won ? '+' : ''}$${profit.toFixed(2)}) — Contract ${cid}`);
+      return;
     }
 
     if (!channel) return;
@@ -1099,9 +1147,9 @@ class EnhancedTradeEngine {
         const lastTick = ticks[ticks.length - 1];
         let evenLossStreak = 0, oddLossStreak = 0, overLossStreak = 0, underLossStreak = 0;
 
-        for (let i = ticks.length - 2; i >= 0; i--) {
+        for (let i = ticks.length - 1; i >= 0; i--) {
           const d = ticks[i];
-          const dist = ticks.length - 2 - i;
+          const dist = ticks.length - 1 - i;
           if (d % 2 !== 0 && evenLossStreak === dist) evenLossStreak++;
           if (d % 2 === 0 && oddLossStreak === dist) oddLossStreak++;
           if (d <= 5 && overLossStreak === dist) overLossStreak++;
@@ -1112,18 +1160,18 @@ class EnhancedTradeEngine {
         const setups = [];
 
         if (activeSubStrategy === 'BOTH5') {
-          if (overLossStreak >= requiredVirtualLosses && lastTick > 5) {
+          if (overLossStreak >= requiredVirtualLosses) {
             setups.push({ market, direction: 'OVER5', streak: overLossStreak, conf: parseFloat(scores.overPct) || 0 });
           }
-          if (underLossStreak >= requiredVirtualLosses && lastTick < 5) {
+          if (underLossStreak >= requiredVirtualLosses) {
             setups.push({ market, direction: 'UNDER5', streak: underLossStreak, conf: parseFloat(scores.underPct) || 0 });
           }
           maxGlobalStreak = Math.max(maxGlobalStreak, overLossStreak, underLossStreak);
         } else {
-          if (evenLossStreak >= requiredVirtualLosses && lastTick % 2 === 0) {
+          if (evenLossStreak >= requiredVirtualLosses) {
             setups.push({ market, direction: 'EVEN', streak: evenLossStreak, conf: parseFloat(scores.evenPct) || 0 });
           }
-          if (oddLossStreak >= requiredVirtualLosses && lastTick % 2 !== 0) {
+          if (oddLossStreak >= requiredVirtualLosses) {
             setups.push({ market, direction: 'ODD', streak: oddLossStreak, conf: parseFloat(scores.oddPct) || 0 });
           }
           maxGlobalStreak = Math.max(maxGlobalStreak, evenLossStreak, oddLossStreak);
@@ -1162,10 +1210,26 @@ class EnhancedTradeEngine {
       }
 
       if (!bestSetup) {
-        this.updateStatus(`📊 Scanning Global Markets... (Max Streak: ${maxGlobalStreak} / Req: ${requiredVirtualLosses})`);
+        // Show virtual loss scanning status with toast on significant streaks
+        const statusMsg = `📊 Scanning ${MARKETS.length} Markets... (Best Streak: ${maxGlobalStreak} / Need: ${requiredVirtualLosses})`;
+        this.updateStatus(statusMsg);
+
+        // Toast notification when a market reaches threshold minus 1 (almost ready)
+        if (maxGlobalStreak > 0 && maxGlobalStreak === requiredVirtualLosses - 1) {
+          if (!this._lastVlToastTime || Date.now() - this._lastVlToastTime > 5000) {
+            toast(`🔎 Virtual losses at ${maxGlobalStreak}/${requiredVirtualLosses} — one more for entry!`, { icon: '📊', duration: 3000 });
+            this._lastVlToastTime = Date.now();
+          }
+        }
         this._scheduleNext(1000);
         return;
       }
+
+      // Toast: Signal found!
+      toast.success(
+        `⚡ Entry Signal! ${bestSetup.direction} on ${MARKET_LABELS[bestSetup.market]} (Streak: ${bestSetup.streak})`,
+        { duration: 4000 }
+      );
 
       // We have a global winner!
       this._lastDirections.push(bestSetup.direction);
