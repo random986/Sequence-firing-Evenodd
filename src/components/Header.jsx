@@ -1,23 +1,25 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { ChevronDown, Printer, LayoutDashboard, Radar, History, Settings, Plus, LogIn, Moon, Sun, Copy } from 'lucide-react';
+import { ChevronDown, Printer, LayoutDashboard, Radar, History, Settings, Plus, LogIn, Moon, Sun, Copy, RefreshCw } from 'lucide-react';
 import useAccountStore from '../store/useAccountStore';
 import useConnectionStore from '../store/useConnectionStore';
 import useTradeStore from '../store/useTradeStore';
 import useConfigStore from '../store/useConfigStore';
 import derivWS from '../lib/derivWS';
-import scanner, { MARKETS } from '../lib/marketScanner';
+import scanner from '../lib/marketScanner';
+import { seedMarketHistory, registerMarketTickHandler } from '../lib/marketWarmup';
 import { generatePKCE } from '../lib/pkce';
+import { fmtMoney, num } from '../lib/format';
 
 const NAV = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/scanner', icon: Radar, label: 'Scanner' },
+  { to: '/', icon: LayoutDashboard, label: 'Synthetic Markets' },
+  { to: '/real-markets', icon: Radar, label: 'Real Markets' },
   { to: '/history', icon: History, label: 'History' },
   { to: '/copytrade', icon: Copy, label: 'Copytrade' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
-export default function Header() {
+export default function Header({ bannerOffset = 0 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('demo'); // 'real' or 'demo'
   const [topupLoading, setTopupLoading] = useState(false);
@@ -76,8 +78,25 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownRef]);
 
-  // Auto-connect to active account on first load
+  // Auto-connect to active account on first load (skip if preloader already warmed session)
   useEffect(() => {
+    if (status === 'authorized' && derivWS.isReady) {
+      registerMarketTickHandler();
+      if (!scanner.isWarmed(10)) {
+        seedMarketHistory().catch(err => console.error('Market warmup error:', err));
+      }
+      const activeAcc = accounts.find(a => a.id === activeAccountId) || accounts[0];
+      if (activeAcc) {
+        derivWS.onAccountUpdate = (info) => {
+          setAccount(info);
+          updateAccountInfo(activeAcc.id, {
+            balance: info.balance, currency: info.currency,
+            loginid: info.loginid,
+          });
+        };
+      }
+      return;
+    }
     if (status === 'disconnected' && !botRunning && accounts.length > 0) {
       const activeAcc = accounts.find(a => a.id === activeAccountId);
       if (activeAcc) {
@@ -99,29 +118,23 @@ export default function Header() {
   const activeAccount = accounts.find(a => a.id === activeAccountId);
   const isDemoActive = activeAccount?.is_virtual || activeAccount?.loginid?.startsWith('VR');
 
-  const totalAssets = currentAccounts.reduce((acc, a) => acc + (typeof a.balance === 'number' ? a.balance : 0), 0);
+  const totalAssets = currentAccounts.reduce((acc, a) => acc + num(a.balance), 0);
 
   const fetchBalances = async () => {
     if (!accounts.length || !accounts[0].token) return;
     try {
-      const response = await fetch('https://api.derivws.com/trading/v1/options/accounts', {
-        headers: {
-          'Deriv-App-ID': '33h51PQlu5tsWflEmmoxW',
-          'Authorization': `Bearer ${accounts[0].token}`
+      // Use the new REST API to fetch all account balances
+      derivWS.token = accounts[0].token;
+      const apiAccounts = await derivWS.fetchAccounts();
+      apiAccounts.forEach(apiAcc => {
+        const localAcc = useAccountStore.getState().accounts.find(a => a.loginid === apiAcc.account_id);
+        if (localAcc) {
+          const bal = typeof apiAcc.balance === 'number' ? apiAcc.balance : parseFloat(apiAcc.balance) || 0;
+          updateAccountInfo(localAcc.id, { balance: bal, currency: apiAcc.currency || 'USD' });
         }
       });
-      if (response.ok) {
-        const result = await response.json();
-        const apiAccounts = result.data || result.accounts || [];
-        apiAccounts.forEach(apiAcc => {
-          const localAcc = useAccountStore.getState().accounts.find(a => a.loginid === apiAcc.account_id);
-          if (localAcc && typeof apiAcc.balance === 'number') {
-            updateAccountInfo(localAcc.id, { balance: apiAcc.balance, currency: apiAcc.currency });
-          }
-        });
-      }
     } catch (err) {
-      console.error('Failed to fetch background balances', err);
+      console.error('Failed to fetch balances via REST:', err);
     }
   };
 
@@ -131,8 +144,20 @@ export default function Header() {
     }
   }, [dropdownOpen]);
 
+  // Also fetch balances on initial mount when accounts exist
+  useEffect(() => {
+    if (accounts.length > 0 && accounts[0].token) {
+      fetchBalances();
+    }
+  }, [accounts.length]);
+
   const handleConnect = (account) => {
     if (botRunning || status === 'connecting') return;
+    if (status === 'authorized' && activeAccountId === account.id && derivWS.isReady) {
+      setActiveAccountId(account.id);
+      setDropdownOpen(false);
+      return;
+    }
     setDropdownOpen(false);
     derivWS.disconnect();
     setActiveAccountId(account.id);
@@ -140,23 +165,8 @@ export default function Header() {
     derivWS.onStatusChange = (newStatus) => {
       setStatus(newStatus);
       if (newStatus === 'authorized') {
-        MARKETS.forEach(sym => {
-          derivWS.send({ ticks_history: sym, end: 'latest', count: 100, style: 'ticks' }).then(res => {
-            if (res.history && res.history.prices) {
-              const pipSize = res.pip_size;
-              res.history.prices.forEach(p => scanner.addTick(sym, p, pipSize));
-            }
-          }).catch(err => console.error('History fetch error:', err));
-          derivWS.subscribeTicks(sym);
-        });
-        
-        // Only register the tick handler once
-        if (!window.__tickHandlerRegistered) {
-          derivWS.on('tick', (msg) => {
-            if (msg.tick) scanner.addTick(msg.tick.symbol, msg.tick.quote, msg.tick.pip_size);
-          });
-          window.__tickHandlerRegistered = true;
-        }
+        registerMarketTickHandler();
+        seedMarketHistory().catch(err => console.error('Market warmup error:', err));
       }
     };
     derivWS.onAccountUpdate = (info) => {
@@ -170,20 +180,24 @@ export default function Header() {
   };
 
   const handleTopup = async () => {
-    if (topupLoading || !isDemoActive) return;
+    if (topupLoading || !isDemoActive || !activeAccount) return;
     setTopupLoading(true);
     try {
-      await derivWS.send({ topup_virtual: 1 });
-      await derivWS.send({ balance: 1 });
+      // Use new REST API endpoint for demo balance reset
+      await derivWS.resetDemoBalance(activeAccount.loginid);
+      // Refresh balances from REST
+      await fetchBalances();
+      // Also sync the active account balance in connection store
+      await derivWS._syncAccountBalance();
     } catch (e) {
-      console.error(e);
+      console.error('Reset demo balance error:', e);
     }
     setTopupLoading(false);
   };
 
   return (
     <header style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
+      position: 'fixed', top: bannerOffset, left: 0, right: 0, zIndex: 50,
       display: 'flex', flexDirection: 'column',
       background: 'var(--bg-secondary)',
       borderBottom: '1px solid var(--border)',
@@ -212,7 +226,7 @@ export default function Header() {
           {/* Connection Status Dot */}
           <div style={{
             width: 8, height: 8, borderRadius: '50%',
-            background: status === 'authorized' ? 'var(--cyan)' : 'var(--text-muted)'
+            background: status === 'authorized' ? 'var(--success)' : 'var(--text-muted)'
           }} />
 
           {/* Theme Toggle */}
@@ -227,6 +241,23 @@ export default function Header() {
           >
             {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
           </button>
+
+          {isLoggedIn && isDemoActive && (
+            <button
+              onClick={handleTopup}
+              disabled={topupLoading}
+              title="Reset Demo Balance"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 12px', border: '1px solid var(--border)', borderRadius: 6,
+                background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 12, fontWeight: 600,
+                cursor: topupLoading ? 'wait' : 'pointer'
+              }}
+            >
+              <RefreshCw size={14} className={topupLoading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">{topupLoading ? 'Resetting...' : 'Reset'}</span>
+            </button>
+          )}
 
           {/* Account Dropdown Toggle */}
           <div ref={dropdownRef} style={{ position: 'relative' }}>
@@ -254,8 +285,8 @@ export default function Header() {
                     </span>
                     <ChevronDown size={14} color="var(--text-muted)" />
                   </div>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--cyan)' }}>
-                    {accountInfo?.balance ? accountInfo.balance.toFixed(2) : '0.00'} {accountInfo?.currency || 'USD'}
+                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {fmtMoney(accountInfo?.balance)} {accountInfo?.currency || 'USD'}
                   </span>
                 </div>
               </button>
@@ -341,20 +372,13 @@ export default function Header() {
                           </div>
                           
                           {isCurrent && activeTab === 'demo' && (
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleTopup(); }}
-                              disabled={topupLoading}
-                              style={{
-                                padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 4,
-                                background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, cursor: topupLoading ? 'wait' : 'pointer'
-                              }}
-                            >
-                              {topupLoading ? 'Resetting...' : 'Reset balance'}
-                            </button>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--cyan)' }}>
+                              {Number.isFinite(num(acc.balance)) ? `${fmtMoney(acc.balance)} ${acc.currency}` : '--'}
+                            </span>
                           )}
                           {!isCurrent && (
                             <span style={{ fontSize: 14, fontWeight: 600 }}>
-                              {typeof acc.balance === 'number' ? `${acc.balance.toFixed(2)} ${acc.currency}` : '--'}
+                              {Number.isFinite(num(acc.balance)) ? `${fmtMoney(acc.balance)} ${acc.currency}` : '--'}
                             </span>
                           )}
                         </div>
@@ -366,7 +390,7 @@ export default function Header() {
                   <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 14, fontWeight: 700 }}>Total assets</span>
-                      <span style={{ fontSize: 14 }}>{totalAssets.toFixed(2)} USD</span>
+                      <span style={{ fontSize: 14 }}>{fmtMoney(totalAssets)} USD</span>
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                       Total assets in your Deriv accounts.

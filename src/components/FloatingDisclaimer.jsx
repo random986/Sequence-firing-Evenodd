@@ -1,8 +1,17 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { AlertTriangle, X } from 'lucide-react';
 
 export default function FloatingDisclaimer() {
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+  const isReal = location.pathname === '/real-markets';
+  
+  const themeColor = isReal ? 'var(--amber)' : 'var(--crimson)';
+  const title = isReal ? 'Real Markets Risk Disclaimer' : 'Synthetic Markets Risk Disclaimer';
+  const desc1 = isReal 
+    ? 'Trading real financial markets (Forex, Commodities, OTC) involves a significant level of risk and may not be suitable for all investors. The high degree of leverage can work against you as well as for you. Before deciding to trade, you should carefully consider your investment objectives, level of experience, and risk appetite.'
+    : 'Trading synthetic indices involves a significant level of risk and may not be suitable for all investors. The high degree of leverage and automated digit trading can work against you as well as for you. Before deciding to trade, you should carefully consider your investment objectives, level of experience, and risk appetite.';
 
   return (
     <>
@@ -12,7 +21,7 @@ export default function FloatingDisclaimer() {
           position: 'fixed',
           bottom: 24,
           left: 24,
-          background: 'var(--amber)', // This is now the bluish color
+          background: themeColor,
           color: '#fff',
           padding: '8px 12px',
           borderRadius: '6px',
@@ -60,11 +69,9 @@ export default function FloatingDisclaimer() {
             >
               <X size={24} />
             </button>
-            <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16, color: 'var(--amber)' }}>Risk Disclaimer</h2>
+            <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16, color: themeColor }}>{title}</h2>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
-              Trading synthetic indices and financial markets involves a significant level of risk and may not be suitable for all investors. 
-              The high degree of leverage can work against you as well as for you. Before deciding to trade, you should carefully consider your 
-              investment objectives, level of experience, and risk appetite.
+              {desc1}
             </p>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 24 }}>
               The possibility exists that you could sustain a loss of some or all of your initial investment and therefore you should not invest 
@@ -74,7 +81,7 @@ export default function FloatingDisclaimer() {
             <button
               onClick={() => setIsOpen(false)}
               style={{
-                background: 'var(--amber)',
+                background: themeColor,
                 color: '#fff',
                 padding: '12px 24px',
                 borderRadius: 8,

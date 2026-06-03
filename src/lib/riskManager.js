@@ -56,8 +56,8 @@ class RiskManager {
 
   /* ── Max safe Martingale depth before losing 20% of balance ── */
   getMaxSafeDepth(config, balance) {
-    // Replaced dynamic depth with explicit user-defined max steps
-    return config.maxSteps || 6;
+    const maxSteps = Number(config.maxSteps);
+    return maxSteps > 0 ? maxSteps : 99;
   }
 
   isExposureSafe(stake, balance) {

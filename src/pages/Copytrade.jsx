@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Copy, RefreshCw, StopCircle, PlayCircle, AlertTriangle, ArrowRight, ArrowLeftRight } from 'lucide-react';
+import { Copy, RefreshCw, StopCircle, PlayCircle, AlertTriangle, ArrowRight, ArrowLeftRight, Zap } from 'lucide-react';
 import useAccountStore from '../store/useAccountStore';
 import copyTradeEngine from '../lib/copyTradeEngine';
+import { useRealMarketStore } from '../stores/useRealMarketStore';
 
 export default function Copytrade() {
   const accounts = useAccountStore(s => s.accounts);
@@ -19,6 +20,10 @@ export default function Copytrade() {
   const [targetAccountId, setTargetAccountId] = useState('');
   const [engineState, setEngineState] = useState(copyTradeEngine.getState());
   const [logs, setLogs] = useState([]);
+  const [scope, setScope] = useState('both'); // 'both' | 'synthetic' | 'real'
+
+  // Real market trade history for mirroring
+  const realTradeHistory = useRealMarketStore(s => s.tradeHistory);
 
   // Set default target based on direction
   useEffect(() => {
@@ -68,7 +73,8 @@ export default function Copytrade() {
         targetToken: targetAcc.token,
         targetAccountId: targetAcc.loginid,
         sourceAccountId: activeAccount.loginid,
-        direction: direction
+        direction: direction,
+        scope: scope
       });
       await copyTradeEngine.start();
     }
@@ -81,6 +87,16 @@ export default function Copytrade() {
     background: active ? 'rgba(255, 68, 79, 0.08)' : 'transparent',
     color: active ? 'var(--crimson)' : 'var(--text-secondary)',
     textAlign: 'center', transition: 'all 0.2s',
+    opacity: engineState.active ? 0.5 : 1,
+    pointerEvents: engineState.active ? 'none' : 'auto',
+  });
+
+  const scopeBtnStyle = (active) => ({
+    flex: 1, padding: '10px 8px', borderRadius: 8, cursor: 'pointer',
+    border: active ? '2px solid var(--amber)' : '1px solid var(--border)',
+    background: active ? 'rgba(255, 193, 7, 0.08)' : 'transparent',
+    color: active ? 'var(--amber)' : 'var(--text-secondary)',
+    textAlign: 'center', transition: 'all 0.2s', fontSize: 12, fontWeight: 600,
     opacity: engineState.active ? 0.5 : 1,
     pointerEvents: engineState.active ? 'none' : 'auto',
   });
@@ -101,7 +117,7 @@ export default function Copytrade() {
           <ArrowLeftRight size={18} color="var(--amber)" />
           Copy Direction
         </h2>
-        <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
           <button onClick={() => setDirection('demo_to_real')} style={dirBtnStyle(direction === 'demo_to_real')}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Demo → Real</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Copy trades from Demo to Real account</div>
@@ -110,6 +126,28 @@ export default function Copytrade() {
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Real → Demo</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Copy trades from Real to Demo account</div>
           </button>
+        </div>
+
+        {/* Scope Selector */}
+        <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Zap size={16} color="var(--amber)" />
+          Trade Scope
+        </h2>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+          <button onClick={() => setScope('both')} style={scopeBtnStyle(scope === 'both')}>
+            Both Markets
+          </button>
+          <button onClick={() => setScope('synthetic')} style={scopeBtnStyle(scope === 'synthetic')}>
+            Synthetic Only
+          </button>
+          <button onClick={() => setScope('real')} style={scopeBtnStyle(scope === 'real')}>
+            Real Only
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>
+          <strong style={{ color: 'var(--amber)' }}>Both Markets</strong>: Copies trades from both Synthetic Indices and Real Markets engines. 
+          <strong style={{ color: 'var(--text-secondary)' }}> Synthetic Only</strong>: Only digit (Even/Odd/Over/Under) trades. 
+          <strong style={{ color: 'var(--text-secondary)' }}> Real Only</strong>: Only Rise/Fall and Accumulator trades from the Real Market engine.
         </div>
 
         {/* Source & Target */}
@@ -171,6 +209,11 @@ export default function Copytrade() {
             <AlertTriangle size={16} color="var(--crimson)" style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               <strong style={{ color: 'var(--crimson)' }}>Caution:</strong> Demo→Real will replicate trades onto your real money account. Ensure you understand the risks. Trades will use the same stake amount.
+              {scope !== 'synthetic' && (
+                <span style={{ color: 'var(--amber)', display: 'block', marginTop: 4 }}>
+                  ⚠️ Real Market trades (Rise/Fall, Accumulators) will also be copied to the target account.
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -184,6 +227,9 @@ export default function Copytrade() {
             }} />
             <span style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
               Status: <span style={{ color: engineState.status === 'authorized' ? 'var(--success)' : 'var(--text-primary)' }}>{engineState.status}</span>
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)' }}>
+              {scope === 'both' ? 'SYN + REAL' : scope === 'synthetic' ? 'SYN ONLY' : 'REAL ONLY'}
             </span>
           </div>
 
@@ -241,3 +287,4 @@ export default function Copytrade() {
     </div>
   );
 }
+

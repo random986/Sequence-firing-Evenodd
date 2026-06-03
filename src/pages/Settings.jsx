@@ -1,9 +1,11 @@
 /* ═══ Settings Page — Premium Grid Layout ═══ */
 import { useState } from 'react';
-import { Settings2, Shield, Plus, Key, Copy, Check, Trash2, SlidersHorizontal, Activity } from 'lucide-react';
+import { Settings2, Shield, Plus, Key, Copy, Check, Trash2, SlidersHorizontal, Activity, Link2 } from 'lucide-react';
 import useConfigStore from '../store/useConfigStore';
+import useTradeStore from '../store/useTradeStore';
 import useAccountStore from '../store/useAccountStore';
 import useConnectionStore from '../store/useConnectionStore';
+import { useRealMarketStore } from '../stores/useRealMarketStore';
 import { generatePKCE } from '../lib/pkce';
 
 
@@ -64,21 +66,53 @@ export default function Settings() {
     }
   };
 
+  const [settingsTab, setSettingsTab] = useState('synthetic');
+  const realStore = useRealMarketStore();
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1000, margin: '0 auto' }}>
       
       {/* Header */}
-      <div>
-        <h1 className="font-display" style={{ fontSize: 26, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Settings2 size={28} color="var(--cyan)" />
-          Terminal Settings
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
-          Manage your Deriv API keys, algorithm strategy, and strict risk guardrails.
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div>
+          <h1 className="font-display" style={{ fontSize: 26, fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Settings2 size={28} color="var(--cyan)" />
+            Terminal Settings
+          </h1>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+            Manage your Deriv API keys, algorithm strategy, and strict risk guardrails.
+          </p>
+        </div>
       </div>
 
-      {/* Grid Layout for Settings */}
+      {/* Tabs */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+        <button 
+          onClick={() => setSettingsTab('synthetic')}
+          style={{
+            padding: '12px 24px', border: 'none', background: 'transparent',
+            fontWeight: 600, fontSize: 14, cursor: 'pointer',
+            borderBottom: settingsTab === 'synthetic' ? '2px solid var(--cyan)' : '2px solid transparent',
+            color: settingsTab === 'synthetic' ? 'var(--text-primary)' : 'var(--text-muted)'
+          }}
+        >
+          Synthetic Markets
+        </button>
+        <button 
+          onClick={() => setSettingsTab('real')}
+          style={{
+            padding: '12px 24px', border: 'none', background: 'transparent',
+            fontWeight: 600, fontSize: 14, cursor: 'pointer',
+            borderBottom: settingsTab === 'real' ? '2px solid var(--cyan)' : '2px solid transparent',
+            color: settingsTab === 'real' ? 'var(--text-primary)' : 'var(--text-muted)'
+          }}
+        >
+          Real Markets
+        </button>
+        
+      </div>
+
+      {settingsTab === 'synthetic' && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Left Column */}
@@ -132,13 +166,15 @@ export default function Settings() {
               min={0.35} max={10} step={0.01}
             />
 
-            {/* Martingale Recovery Toggle */}
+            {/* Martingale toggle */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div>
-                  <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>Martingale Recovery</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>Martingale</span>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {config.recoveryEnabled ? 'Doubles stake after loss to recover' : 'Disabled — flat stake only'}
+                    {config.recoveryEnabled
+                      ? `Next stake = base × ${config.martMultiplier ?? 2}^step after each loss; resets to base on win`
+                      : 'Disabled — flat stake only'}
                   </div>
                 </div>
                 <button
@@ -224,14 +260,22 @@ export default function Settings() {
                 <SliderInput
                   label="Martingale Multiplier" value={config.martMultiplier} unit="x"
                   onChange={(v) => config.updateConfig({ martMultiplier: v })}
-                  min={1} max={3} step={0.1}
+                  min={1.5} max={4} step={0.1}
                 />
                 <SliderInput
-                  label="Max Martingale Steps" value={config.maxSteps !== undefined ? config.maxSteps : 6} unit="steps"
-                  onChange={(v) => config.updateConfig({ maxSteps: v })}
-                  min={0} max={15} step={1}
+                  label="Max Martingale Steps (0 = unlimited)" value={config.maxMartingaleStep ?? config.maxSteps ?? 0} unit="steps"
+                  onChange={(v) => config.updateConfig({ maxMartingaleStep: v, maxSteps: v })}
+                  min={0} max={12} step={1}
                 />
-                {(config.maxSteps || 0) === 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>0 = No limit (Danger)</div>}
+                <SliderInput
+                  label="Hold martingale at step" value={config.martingaleHoldAfterStep ?? 0} unit="step"
+                  onChange={(v) => config.updateConfig({ martingaleHoldAfterStep: v })}
+                  min={0} max={12} step={1}
+                />
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+                  0 = unlimited martingale (EO/OU winning always unlimited). N = optional stake ceiling at base × mult^N.
+                  Hold step: freeze step count at N until that leg wins.
+                </div>
               </>
             )}
 
@@ -244,19 +288,48 @@ export default function Settings() {
             )}
 
             <SliderInput
-              label="Virtual Losses to Wait (Sniper Entry)" value={config.virtualLossesToWait !== undefined ? config.virtualLossesToWait : 3} unit="losses"
+              label="Virtual Losses to Wait (base bars)" value={config.virtualLossesToWait ?? 3} unit="bars"
               onChange={(v) => config.updateConfig({ virtualLossesToWait: v })}
-              min={0} max={10} step={1}
+              min={2} max={5} step={1}
             />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              After each loss: entry test window paper-trades setups; status shows 🧪 testing then confirmed pick.
+            </div>
             <SliderInput
-              label="Trade Cooldown" value={(config.cooldownMs || 3000) / 1000} unit="sec"
+              label="Trade Cooldown" value={(config.cooldownMs || 500) / 1000} unit="sec"
               onChange={(v) => config.updateConfig({ cooldownMs: Math.round(v * 1000) })}
-              min={1} max={10} step={0.5}
+              min={0.3} max={2} step={0.1}
             />
             <SliderInput
-              label="Min Signal Strength" value={config.minConfidence || 65} unit="%"
+              label="Entry test min (random)" value={config.entryConfirmMinSec ?? 20} unit="sec"
+              onChange={(v) => config.updateConfig({ entryConfirmMinSec: v, entryConfirmRandom: true, entryConfirmEnabled: true })}
+              min={10} max={25} step={5}
+            />
+            <SliderInput
+              label="Entry test max (random)" value={config.entryConfirmMaxSec ?? 25} unit="sec"
+              onChange={(v) => config.updateConfig({ entryConfirmMaxSec: v, entryConfirmRandom: true, entryConfirmEnabled: true })}
+              min={20} max={30} step={5}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              After each loss: random wait between min–max sec while paper-testing 15 markets, then fires the confirmed best setup.
+            </div>
+            <SliderInput
+              label="Min Signal Strength" value={config.minConfidence || 60} unit="%"
               onChange={(v) => config.updateConfig({ minConfidence: v })}
-              min={50} max={85} step={1}
+              min={45} max={75} step={1}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -8, marginBottom: 12 }}>
+              Ranks all VL setups across 15 markets and always picks the highest win-rank — no blocking threshold.
+            </div>
+            <SliderInput
+              label="Max Stake Cap (0 = off)" value={config.maxStakeCap || 0} unit="USD"
+              onChange={(v) => config.updateConfig({ maxStakeCap: v })}
+              min={0} max={50} step={0.1}
+            />
+            <SliderInput
+              label="Max Trades / Minute (0 = off)" value={config.maxTradesPerMinute || 0} unit=""
+              onChange={(v) => config.updateConfig({ maxTradesPerMinute: v })}
+              min={0} max={30} step={1}
             />
           </div>
         </div>
@@ -281,16 +354,274 @@ export default function Settings() {
               onChange={(v) => config.updateConfig({ takeProfit: v })}
               min={0} max={500} step={1}
             />
-            {config.takeProfit === 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>0 = No limit</div>}
+            {config.takeProfit === 0 ? (
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+                0 = no session stop target. Martingale still resets to base stake after each win.
+              </div>
+            ) : (
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+                Bot stops the session when P&amp;L reaches this. Martingale resets to base after every win.
+              </div>
+            )}
             <SliderInput
-              label="Max Consecutive Losses" value={config.maxLossStreak || 0} unit="Losses"
+              label="Max consecutive losses (pause)" value={config.maxLossStreak ?? 0} unit="L"
               onChange={(v) => config.updateConfig({ maxLossStreak: v })}
               min={0} max={10} step={1}
             />
-            {(config.maxLossStreak || 0) === 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>0 = No limit</div>}
-          </div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              At this streak: pause trading, reset martingale to base. 0 = off. Hard stop only if enabled below.
+            </div>
+            <SliderInput
+              label="Loss-streak pause duration" value={config.lossStreakPauseMs ?? 12000} unit="ms"
+              onChange={(v) => config.updateConfig({ lossStreakPauseMs: v })}
+              min={3000} max={60000} step={1000}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Stop session at max loss streak</span>
+              <button
+                type="button"
+                onClick={() => config.updateConfig({ maxLossStreakStopEnabled: !config.maxLossStreakStopEnabled })}
+                style={{
+                  width: 48, height: 26, borderRadius: 13,
+                  background: config.maxLossStreakStopEnabled ? 'var(--red)' : 'var(--border)',
+                  border: 'none', position: 'relative', cursor: 'pointer',
+                }}
+              >
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                  position: 'absolute', top: 3,
+                  left: config.maxLossStreakStopEnabled ? 25 : 3,
+                  transition: 'left 0.2s',
+                }} />
+              </button>
+            </div>
+            <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0', paddingTop: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cyan)', marginBottom: 12 }}>Performance &amp; kill switch</div>
+              <SliderInput
+                label="Session drawdown stop" value={config.sessionDrawdownStopPct ?? 28} unit="%"
+                onChange={(v) => config.updateConfig({ sessionDrawdownStopPct: v })}
+                min={0} max={50} step={1}
+              />
+              {config.sessionDrawdownStopPct === 0 && (
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>0 = off</div>
+              )}
+              <SliderInput
+                label="Rolling WR kill floor" value={config.rollingWinRateFloor ?? 48} unit="%"
+                onChange={(v) => config.updateConfig({ rollingWinRateFloor: v, rollingWinRateKillEnabled: true })}
+                min={40} max={55} step={1}
+              />
+              <SliderInput
+                label="Rolling WR window" value={config.rollingWinRateWindow ?? 50} unit="trades"
+                onChange={(v) => config.updateConfig({ rollingWinRateWindow: v })}
+                min={10} max={100} step={5}
+              />
+              <SliderInput
+                label="Min trades before WR kill" value={config.rollingWinRateMinTrades ?? 20} unit=""
+                onChange={(v) => config.updateConfig({ rollingWinRateMinTrades: v })}
+                min={10} max={100} step={5}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Rolling win-rate kill switch</span>
+                <button
+                  type="button"
+                  onClick={() => config.updateConfig({ rollingWinRateKillEnabled: !config.rollingWinRateKillEnabled })}
+                  style={{
+                    width: 48, height: 26, borderRadius: 13,
+                    background: config.rollingWinRateKillEnabled !== false ? 'var(--cyan)' : 'var(--border)',
+                    border: 'none', position: 'relative', cursor: 'pointer',
+                  }}
+                >
+                  <div style={{
+                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    position: 'absolute', top: 3,
+                    left: config.rollingWinRateKillEnabled !== false ? 25 : 3,
+                    transition: 'left 0.2s',
+                  }} />
+                </button>
+              </div>
+              <SliderInput
+                label="Cascade pause after losses" value={config.cascadePauseAt ?? 3} unit="L"
+                onChange={(v) => config.updateConfig({ cascadePauseAt: v })}
+                min={0} max={8} step={1}
+              />
+              <SliderInput
+                label="Cascade freeze martingale at" value={config.cascadeFreezeAt ?? 4} unit="L"
+                onChange={(v) => config.updateConfig({ cascadeFreezeAt: v })}
+                min={0} max={10} step={1}
+              />
+              <SliderInput
+                label="Cascade auto-stop at" value={config.cascadeStopAt ?? 6} unit="L"
+                onChange={(v) => config.updateConfig({ cascadeStopAt: v })}
+                min={0} max={15} step={1}
+              />
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--cyan)', margin: '16px 0 8px' }}>Entry quality (BOTH / BOTH5)</div>
+              <SliderInput
+                label="Min win % to fire" value={config.entryGateMinWin ?? 49} unit="%"
+                onChange={(v) => config.updateConfig({ entryGateMinWin: v })}
+                min={45} max={60} step={1}
+              />
+              <SliderInput
+                label="Tighten win % per loss" value={config.entryGateTightenPerLoss ?? 2} unit="%"
+                onChange={(v) => config.updateConfig({ entryGateTightenPerLoss: v })}
+                min={0} max={5} step={1}
+              />
+              <SliderInput
+                label="Min binary edge" value={config.entryGateMinEdge ?? 102} unit=""
+                onChange={(v) => config.updateConfig({ entryGateMinEdge: v })}
+                min={90} max={140} step={2}
+              />
+              <SliderInput
+                label="Min opposite run (opp end)" value={config.entryGateMinOppEnd ?? 4} unit="ticks"
+                onChange={(v) => config.updateConfig({ entryGateMinOppEnd: v })}
+                min={3} max={6} step={1}
+              />
+            </div>
 
-          {/* Theme Settings */}
+            <div style={{ borderTop: '1px solid var(--border)', margin: '8px 0 16px', paddingTop: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--amber)', marginBottom: 12 }}>Best-performance presets</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>Conservative mode</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Max mart 2, tighter WR kill (50%), 20% drawdown cap</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => config.updateConfig({ conservativeMode: !config.conservativeMode })}
+                    style={{
+                      width: 48, height: 26, borderRadius: 13,
+                      background: config.conservativeMode ? 'var(--amber)' : 'var(--border)',
+                      border: 'none', position: 'relative', cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                      position: 'absolute', top: 3, left: config.conservativeMode ? 25 : 3,
+                      transition: 'left 0.2s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>Base stake only</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>No martingale steps — safest for testing edge</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => config.updateConfig({ minStakeOnly: !config.minStakeOnly })}
+                    style={{
+                      width: 48, height: 26, borderRadius: 13,
+                      background: config.minStakeOnly ? 'var(--emerald)' : 'var(--border)',
+                      border: 'none', position: 'relative', cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                      position: 'absolute', top: 3, left: config.minStakeOnly ? 25 : 3,
+                      transition: 'left 0.2s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>Require exhaustion gate</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>BOTH/BOTH5 only fire on 4-tick reversal setup (blocks false 100% scores)</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => config.updateConfig({ requireExhaustionGate: !config.requireExhaustionGate })}
+                    style={{
+                      width: 48, height: 26, borderRadius: 13,
+                      background: config.requireExhaustionGate !== false ? 'var(--cyan)' : 'var(--border)',
+                      border: 'none', position: 'relative', cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                      position: 'absolute', top: 3, left: config.requireExhaustionGate !== false ? 25 : 3,
+                      transition: 'left 0.2s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>Invert trade direction</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Take opposite of ranked pick (OVER↔UNDER, EVEN↔ODD)</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => config.updateConfig({ invertTradeDirection: !config.invertTradeDirection })}
+                    style={{
+                      width: 48, height: 26, borderRadius: 13,
+                      background: config.invertTradeDirection ? 'var(--crimson)' : 'var(--border)',
+                      border: 'none', position: 'relative', cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                      position: 'absolute', top: 3, left: config.invertTradeDirection ? 25 : 3,
+                      transition: 'left 0.2s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>Adaptive invert (low WR)</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Auto-flip when rolling win rate drops below 44%</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => config.updateConfig({ adaptiveInvertDirection: !config.adaptiveInvertDirection })}
+                    style={{
+                      width: 48, height: 26, borderRadius: 13,
+                      background: config.adaptiveInvertDirection !== false ? 'var(--amber)' : 'var(--border)',
+                      border: 'none', position: 'relative', cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                      position: 'absolute', top: 3, left: config.adaptiveInvertDirection !== false ? 25 : 3,
+                      transition: 'left 0.2s',
+                    }} />
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>Persist trade log</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Save up to 2000 trades locally for CSV export</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => config.updateConfig({ persistTradeLog: config.persistTradeLog === false })}
+                    style={{
+                      width: 48, height: 26, borderRadius: 13,
+                      background: config.persistTradeLog !== false ? 'var(--cyan)' : 'var(--border)',
+                      border: 'none', position: 'relative', cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                      position: 'absolute', top: 3, left: config.persistTradeLog !== false ? 25 : 3,
+                      transition: 'left 0.2s',
+                    }} />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    useTradeStore.getState().clearPersistedLog();
+                  }}
+                  style={{
+                    marginTop: 4, padding: '8px 12px', borderRadius: 8,
+                    border: '1px solid var(--border)', background: 'transparent',
+                    color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
+                  }}
+                >
+                  Clear persisted analytics log
+                </button>
+              </div>
+            </div>
+          </div>
           <div className="glass" style={{ padding: '24px' }}>
             <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Settings2 size={18} color="var(--cyan)" />
@@ -409,9 +740,274 @@ export default function Settings() {
               </div>
             )}
           </div>
-
         </div>
       </div>
+      )}
+
+      {settingsTab === 'real' && (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column — Staking & Strategy */}
+        <div className="flex flex-col gap-6">
+
+          {/* Staking Rules */}
+          <div className="glass" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <SlidersHorizontal size={18} color="var(--cyan)" />
+              Real Market Staking Rules
+            </h2>
+            <SliderInput
+              label="Base Stake" value={realStore.baseStake} unit="USD"
+              onChange={(v) => realStore.setBaseStake(v)}
+              min={0.35} max={50} step={0.01}
+            />
+            <SliderInput
+              label="Max Stake Cap (0 = off)" value={realStore.maxStakeCap || 0} unit="USD"
+              onChange={(v) => useRealMarketStore.setState({ maxStakeCap: v })}
+              min={0} max={100} step={1}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              Maximum stake the engine can ever place per contract.
+            </div>
+          </div>
+
+          {/* Rise/Fall Strategy */}
+          <div className="glass" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Activity size={18} color="var(--success)" />
+              Rise/Fall Configuration
+            </h2>
+            <SliderInput
+              label="Min Efficiency Ratio (ER) for entry" value={realStore.minERForRiseFall ?? 0.60} unit=""
+              onChange={(v) => useRealMarketStore.setState({ minERForRiseFall: v })}
+              min={0.30} max={0.90} step={0.05}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              Markets with ER below this threshold won't be routed to Rise/Fall.
+            </div>
+            <SliderInput
+              label="Max SVC (Spread vs Candle) for entry" value={realStore.maxSVCForRiseFall ?? 0.15} unit=""
+              onChange={(v) => useRealMarketStore.setState({ maxSVCForRiseFall: v })}
+              min={0.05} max={0.30} step={0.01}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              Higher spread-to-candle ratios indicate unfavourable execution conditions.
+            </div>
+            <SliderInput
+              label="Alpha σ Threshold for trigger" value={realStore.alphaSigmaThreshold ?? 2.0} unit="σ"
+              onChange={(v) => useRealMarketStore.setState({ alphaSigmaThreshold: v })}
+              min={1.0} max={4.0} step={0.1}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              How many standard deviations of velocity acceleration (α) above the mean to trigger entry.
+            </div>
+            <SliderInput
+              label="Min MCS Score for Rise/Fall" value={realStore.minMCSForRiseFall ?? 0.40} unit=""
+              onChange={(v) => useRealMarketStore.setState({ minMCSForRiseFall: v })}
+              min={0.20} max={0.90} step={0.05}
+            />
+          </div>
+
+          {/* Accumulator Strategy */}
+          <div className="glass" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Activity size={18} color="var(--cyan)" />
+              Accumulator Configuration
+            </h2>
+            <SliderInput
+              label="Max ER for Accumulator routing" value={realStore.maxERForAccumulator ?? 0.30} unit=""
+              onChange={(v) => useRealMarketStore.setState({ maxERForAccumulator: v })}
+              min={0.10} max={0.50} step={0.05}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              Accumulators work best in low-trend (compressing) conditions.
+            </div>
+            <SliderInput
+              label="TII Exhaustion Threshold" value={realStore.tiiThreshold ?? 0.75} unit=""
+              onChange={(v) => useRealMarketStore.setState({ tiiThreshold: v })}
+              min={0.40} max={1.20} step={0.05}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              TII (Tick Intensity Index) below this value indicates volume exhaustion — ideal for accumulators.
+            </div>
+            <SliderInput
+              label="BB Proximity Squeeze Threshold" value={(realStore.bbProxThreshold ?? 0.0005) * 10000} unit="pips (÷10000)"
+              onChange={(v) => useRealMarketStore.setState({ bbProxThreshold: v / 10000 })}
+              min={1} max={20} step={1}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              Bollinger Band proximity below this value signals a squeeze. Displayed as pips × 10000 for readability.
+            </div>
+            <SliderInput
+              label="Growth Rate (%)" value={(realStore.accumulatorGrowthRate ?? 0.01) * 100} unit="%"
+              onChange={(v) => useRealMarketStore.setState({ accumulatorGrowthRate: v / 100 })}
+              min={1} max={5} step={1}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              Accumulator growth rate: 1% (safest), 2%, 3%, 4%, 5% (highest risk/reward).
+            </div>
+            <SliderInput
+              label="Min MCS Score for Accumulator" value={realStore.minMCSForAccumulator ?? 0.40} unit=""
+              onChange={(v) => useRealMarketStore.setState({ minMCSForAccumulator: v })}
+              min={0.20} max={0.90} step={0.05}
+            />
+          </div>
+        </div>
+
+        {/* Right Column — Risk & Duration */}
+        <div className="flex flex-col gap-6">
+
+          {/* Risk Guardrails */}
+          <div className="glass" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Shield size={18} color="var(--amber)" />
+              Risk Guardrails
+            </h2>
+            <SliderInput
+              label="Session Drawdown Stop" value={(realStore.drawdownLimitPct ?? 5)} unit="%"
+              onChange={(v) => useRealMarketStore.setState({ drawdownLimitPct: v })}
+              min={1} max={25} step={1}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              Kill switch auto-engages if session P&L drops below this % of starting balance.
+            </div>
+            <SliderInput
+              label="Consecutive Loss Pause Limit" value={realStore.consecutiveLossLimit ?? 3} unit="losses"
+              onChange={(v) => useRealMarketStore.setState({ consecutiveLossLimit: v })}
+              min={1} max={10} step={1}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              After this many consecutive losses the engine pauses for 30 minutes.
+            </div>
+            <SliderInput
+              label="Consecutive Loss Pause Duration" value={realStore.pauseDurationMin ?? 30} unit="min"
+              onChange={(v) => useRealMarketStore.setState({ pauseDurationMin: v })}
+              min={5} max={60} step={5}
+            />
+            <SliderInput
+              label="Max Concurrent Open Trades" value={realStore.maxConcurrentTrades ?? 3} unit=""
+              onChange={(v) => useRealMarketStore.setState({ maxConcurrentTrades: v })}
+              min={1} max={10} step={1}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              Maximum number of trades that can be open simultaneously.
+            </div>
+            <SliderInput
+              label="Daily Loss Stop (0 = off)" value={realStore.dailyLossStop ?? 0} unit="USD"
+              onChange={(v) => useRealMarketStore.setState({ dailyLossStop: v })}
+              min={0} max={500} step={5}
+            />
+            <SliderInput
+              label="Daily Profit Target (0 = off)" value={realStore.dailyProfitTarget ?? 0} unit="USD"
+              onChange={(v) => useRealMarketStore.setState({ dailyProfitTarget: v })}
+              min={0} max={500} step={5}
+            />
+          </div>
+
+          {/* Duration Engine */}
+          <div className="glass" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <SlidersHorizontal size={18} color="var(--cyan)" />
+              Duration Engine
+            </h2>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Expiry Mode</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['AUTO', '1m', '2m', '3m', '5m', '10m', '15m'].map(val => (
+                  <button
+                    key={val}
+                    onClick={() => realStore.setExpiry ? realStore.setExpiry(val) : useRealMarketStore.setState({ expiry: val })}
+                    style={{
+                      padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      background: (realStore.expiry || 'AUTO') === val ? 'var(--cyan)' : 'rgba(255,255,255,0.05)',
+                      color: (realStore.expiry || 'AUTO') === val ? '#000' : 'var(--text-muted)',
+                      border: (realStore.expiry || 'AUTO') === val ? 'none' : '1px solid var(--border)',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {val}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>
+                AUTO mode uses T50/VIX-scaled algorithm: high volatility → short duration, low volatility → long duration.
+              </div>
+            </div>
+            <SliderInput
+              label="K_max Hard Exit (seconds)" value={realStore.kMaxExit ?? 180} unit="sec"
+              onChange={(v) => useRealMarketStore.setState({ kMaxExit: v })}
+              min={30} max={600} step={15}
+            />
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: -12, marginBottom: 12 }}>
+              Maximum time to hold any single trade before force-selling.
+            </div>
+          </div>
+
+          {/* News & Session Controls */}
+          <div className="glass" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Shield size={18} color="var(--crimson)" />
+              News & Kill Switch
+            </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Auto-Block During News Events</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Block affected currency pairs ±10/5 min around high-impact news</div>
+              </div>
+              <button
+                onClick={() => useRealMarketStore.setState(s => ({ newsBlockEnabled: !(s.newsBlockEnabled ?? true) }))}
+                style={{
+                  width: 48, height: 26, borderRadius: 13,
+                  background: (realStore.newsBlockEnabled ?? true) ? 'var(--cyan)' : 'var(--border)',
+                  border: 'none', position: 'relative', cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+              >
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                  position: 'absolute', top: 3,
+                  left: (realStore.newsBlockEnabled ?? true) ? 25 : 3,
+                  transition: 'left 0.2s',
+                }} />
+              </button>
+            </div>
+            <SliderInput
+              label="News Pre-Block Window" value={realStore.newsPreBlockMin ?? 10} unit="min"
+              onChange={(v) => useRealMarketStore.setState({ newsPreBlockMin: v })}
+              min={5} max={30} step={5}
+            />
+            <SliderInput
+              label="News Post-Block Window" value={realStore.newsPostBlockMin ?? 5} unit="min"
+              onChange={(v) => useRealMarketStore.setState({ newsPostBlockMin: v })}
+              min={1} max={15} step={1}
+            />
+            <div style={{ borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--crimson)' }}>Kill Switch</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{realStore.killSwitchActive ? 'Active — all trading halted' : 'Inactive'}</div>
+                </div>
+                <button
+                  onClick={() => useRealMarketStore.getState().toggleKillSwitch()}
+                  style={{
+                    padding: '8px 20px', borderRadius: 8, fontWeight: 700, fontSize: 12,
+                    background: realStore.killSwitchActive ? 'var(--success)' : 'var(--crimson)',
+                    color: '#fff', border: 'none', cursor: 'pointer',
+                    boxShadow: realStore.killSwitchActive ? '0 4px 12px rgba(0,230,118,0.2)' : '0 4px 12px rgba(255,68,79,0.2)'
+                  }}
+                >
+                  {realStore.killSwitchActive ? 'RESET KILL SWITCH' : 'ENGAGE KILL SWITCH'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
+
+      
     </div>
   );
 }
+

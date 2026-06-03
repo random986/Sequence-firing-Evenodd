@@ -1,8 +1,10 @@
 /* ══════════════════════════════════════════════════════════════
    DERIVPRINTER — Market Scanner
    Real-time analysis of all Deriv digit markets.
-   Maintains 200-tick buffers and computes rankings.
+   Maintains 200-tick buffers, digit counter (CSPRNG model), rankings.
    ══════════════════════════════════════════════════════════════ */
+
+import { analyzeDigitCounter, mergeCounterIntoScores } from './digitCounter.js';
 
 export const MARKETS = [
   'R_10', 'R_25', 'R_50', 'R_75', 'R_100',
@@ -18,7 +20,83 @@ export const MARKET_LABELS = {
   'JD75': 'J75', 'JD100': 'J100'
 };
 
-const BUFFER_SIZE = 200;
+export function isLossForDir(d, dir, prevD = null, price = null, prevPrice = null, hottestDigit = null) {
+  if (dir.startsWith('OVER')) return d <= parseInt(dir.slice(4), 10);
+  if (dir.startsWith('UNDER')) return d >= parseInt(dir.slice(5), 10);
+  if (dir === 'EVEN') return d % 2 !== 0;
+  if (dir === 'ODD') return d % 2 === 0;
+  if (dir === 'RISE') {
+    if (price !== null && prevPrice !== null) return price <= prevPrice;
+    return false;
+  }
+  if (dir === 'FALL') {
+    if (price !== null && prevPrice !== null) return price >= prevPrice;
+    return false;
+  }
+  if (dir === 'MATCH') {
+    if (hottestDigit !== null) return d !== hottestDigit;
+    return d !== 5;
+  }
+  if (dir === 'DIFF') {
+    if (hottestDigit !== null) return d === hottestDigit;
+    return d === 5;
+  }
+  return false;
+}
+
+/** Average length of interrupted loss runs (for convergence exhaustion depth). */
+export function computeAvgMaxLossStreak(digits, pricesOrSide, side = null, hottestDigit = null) {
+  let prices = null;
+  let sideKey = '';
+  if (Array.isArray(pricesOrSide)) {
+    prices = pricesOrSide;
+    sideKey = side;
+  } else {
+    sideKey = pricesOrSide;
+  }
+  const runs = [];
+  let cur = 0;
+  for (let i = 0; i < digits.length; i++) {
+    const d = digits[i];
+    const prevD = i > 0 ? digits[i-1] : null;
+    const price = prices ? prices[i] : null;
+    const prevPrice = (prices && i > 0) ? prices[i-1] : null;
+    
+    let isLoss = false;
+    if (sideKey === 'over') isLoss = isLossForDir(d, 'OVER5', prevD, price, prevPrice, hottestDigit);
+    else if (sideKey === 'under') isLoss = isLossForDir(d, 'UNDER5', prevD, price, prevPrice, hottestDigit);
+    else if (sideKey === 'even') isLoss = isLossForDir(d, 'EVEN', prevD, price, prevPrice, hottestDigit);
+    else if (sideKey === 'odd') isLoss = isLossForDir(d, 'ODD', prevD, price, prevPrice, hottestDigit);
+    else isLoss = isLossForDir(d, sideKey, prevD, price, prevPrice, hottestDigit);
+    
+    if (isLoss) cur++;
+    else {
+      if (cur > 0) runs.push(cur);
+      cur = 0;
+    }
+  }
+  if (cur > 0) runs.push(cur);
+  if (runs.length === 0) return 3;
+  return runs.reduce((a, b) => a + b, 0) / runs.length;
+}
+
+function tailLossStreakFromEnd(digits, prices, dir, hottestDigit = null) {
+  let streak = 0;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    const d = digits[i];
+    const prevD = i > 0 ? digits[i-1] : null;
+    const price = prices?.[i] ?? null;
+    const prevPrice = i > 0 ? (prices?.[i-1] ?? null) : null;
+    if (isLossForDir(d, dir, prevD, price, prevPrice, hottestDigit)) streak++;
+    else break;
+  }
+  return streak;
+}
+
+/** Digit history depth — 200 ticks for volatility (100-window) + chi-square analysis. */
+export const APEX_TICK_CAP = 200;
+export const APEX_ANALYSIS_WINDOW = 100;
+const BUFFER_SIZE = APEX_TICK_CAP;
 const ANALYSIS_WINDOW = 25;
 
 /* ── Extract last digit from tick price using pip_size ── */
@@ -31,19 +109,22 @@ export function extractDigit(price, pipSize = 3) {
 class MarketScanner {
   constructor() {
     this.buffers = {};     // symbol -> digit array
+    this.priceBuffers = {}; // symbol -> price array (to compute RISE/FALL)
     this.scores = {};      // symbol -> analysis object
     this.pipSizes = {};    // symbol -> pip size
     this.tickCounts = {};  // symbol -> total ticks received
-    this.onUpdate = null;  // callback when scores change
+    this.lastTickAt = {};  // symbol -> local receipt epoch (network phase)
+    this.listeners = new Set(); // multiple callbacks
     MARKETS.forEach(sym => {
       this.buffers[sym] = [];
+      this.priceBuffers[sym] = [];
       this.scores[sym] = this._emptyScore();
       this.pipSizes[sym] = 3; // Default fallback
       this.tickCounts[sym] = 0;
+      this.lastTickAt[sym] = 0;
     });
   }
 
-  /* ── Ingest a tick ── */
   addTick(symbol, price, pipSize = null) {
     if (!this.buffers[symbol]) return;
 
@@ -54,14 +135,30 @@ class MarketScanner {
     const digit = extractDigit(price, this.pipSizes[symbol]);
     const buf = this.buffers[symbol];
     buf.push(digit);
-    if (buf.length > BUFFER_SIZE) buf.shift();
-    
+    if (buf.length > APEX_TICK_CAP) {
+      this.buffers[symbol] = buf.slice(-APEX_TICK_CAP);
+    }
+
+    const numPrice = parseFloat(price) || 0;
+    const pBuf = this.priceBuffers[symbol] || [];
+    pBuf.push(numPrice);
+    if (pBuf.length > APEX_TICK_CAP) {
+      this.priceBuffers[symbol] = pBuf.slice(-APEX_TICK_CAP);
+    }
+
+    this.lastTickAt[symbol] = Date.now();
     this.tickCounts[symbol]++;
 
-    // Recalculate scores for this market
-    this.scores[symbol] = this._analyze(buf);
+    const base = this._analyze(this.buffers[symbol], this.priceBuffers[symbol]);
+    const counter = analyzeDigitCounter(this.buffers[symbol]);
+    this.scores[symbol] = mergeCounterIntoScores(base, counter);
 
-    if (this.onUpdate) this.onUpdate(symbol, this.scores);
+    this.listeners.forEach(cb => cb(symbol, this.scores));
+  }
+
+  onUpdate(cb) {
+    this.listeners.add(cb);
+    return () => this.listeners.delete(cb);
   }
 
   /* ── Get ranked markets for a strategy ── */
@@ -86,16 +183,30 @@ class MarketScanner {
     return ranked[0]?.symbol || MARKETS[0];
   }
 
+  getTicks(symbol) {
+    return [...(this.buffers[symbol] || [])];
+  }
+
+  getAllScores() {
+    return { ...this.scores };
+  }
+
+  isWarmed(minTicks = 30) {
+    return MARKETS.every(s => (this.buffers[s]?.length || 0) >= minTicks);
+  }
+
   /* ── Analysis engine ── */
-  _analyze(digits) {
+  _analyze(digits, prices = null) {
     if (digits.length < 10) return this._emptyScore();
 
     const slice = digits.slice(-ANALYSIS_WINDOW);
     const full = digits.slice(-BUFFER_SIZE);
+    const priceSlice = prices ? prices.slice(-ANALYSIS_WINDOW) : Array(slice.length).fill(0);
     
     // ═══ LONG-TERM TREND (last 100 ticks) ═══
     const LONG_WINDOW = 100;
     const longSlice = digits.slice(-Math.min(digits.length, LONG_WINDOW));
+    const priceLongSlice = prices ? prices.slice(-Math.min(digits.length, LONG_WINDOW)) : Array(longSlice.length).fill(0);
 
     let ltOverCount = 0, ltUnderCount = 0;
     for (const d of longSlice) {
@@ -156,6 +267,7 @@ class MarketScanner {
     // Count how many of the LAST N ticks went AGAINST each direction
     // This tells us how "exhausted" the losing side is
     const recentWindow = digits.slice(-15);
+    const priceRecentWindow = prices ? prices.slice(-15) : Array(recentWindow.length).fill(0);
     let recentOverLosses = 0, recentUnderLosses = 0;
     let recentEvenLosses = 0, recentOddLosses = 0;
     // Count from the END backwards — how many consecutive ticks go against each direction
@@ -184,6 +296,72 @@ class MarketScanner {
     const freq = Array(10).fill(0);
     for (const d of slice) freq[d]++;
 
+    const histBuf = digits.slice(-BUFFER_SIZE);
+    const priceHistBuf = prices ? prices.slice(-BUFFER_SIZE) : Array(histBuf.length).fill(0);
+
+    const slice20 = digits.slice(-20);
+    const counts20 = Array(10).fill(0);
+    for (const d of slice20) counts20[d]++;
+    let maxCount = -1;
+    let hottestDigit = 5;
+    for (let d = 0; d < 10; d++) {
+      if (counts20[d] > maxCount) {
+        maxCount = counts20[d];
+        hottestDigit = d;
+      }
+    }
+
+    const avgMaxOverLoss = computeAvgMaxLossStreak(histBuf, priceHistBuf, 'over', hottestDigit);
+    const avgMaxUnderLoss = computeAvgMaxLossStreak(histBuf, priceHistBuf, 'under', hottestDigit);
+    const avgMaxEvenLoss = computeAvgMaxLossStreak(histBuf, priceHistBuf, 'even', hottestDigit);
+    const avgMaxOddLoss = computeAvgMaxLossStreak(histBuf, priceHistBuf, 'odd', hottestDigit);
+    const tailOverLoss = tailLossStreakFromEnd(histBuf, priceHistBuf, 'OVER5', hottestDigit);
+    const tailUnderLoss = tailLossStreakFromEnd(histBuf, priceHistBuf, 'UNDER5', hottestDigit);
+    const tailEvenLoss = tailLossStreakFromEnd(histBuf, priceHistBuf, 'EVEN', hottestDigit);
+    const tailOddLoss = tailLossStreakFromEnd(histBuf, priceHistBuf, 'ODD', hottestDigit);
+
+    const DIRS = ['OVER3','OVER4','OVER5','OVER6','OVER7','UNDER4','UNDER5','UNDER6','UNDER7','UNDER8','EVEN','ODD','RISE','FALL','MATCH','DIFF'];
+    const pct = {};
+    const ltPctMap = {};
+    const recentLossesMap = {};
+    const tailLossMap = {};
+    const avgMaxLossMap = {};
+    
+    for (const dir of DIRS) {
+      let count = 0;
+      for (let i = 0; i < slice.length; i++) {
+        const d = slice[i];
+        const prevD = i > 0 ? slice[i-1] : null;
+        const price = priceSlice[i];
+        const prevPrice = i > 0 ? priceSlice[i-1] : null;
+        if (!isLossForDir(d, dir, prevD, price, prevPrice, hottestDigit)) count++;
+      }
+      pct[dir] = ((count / slice.length) * 100).toFixed(1);
+      
+      let ltCount = 0;
+      for (let i = 0; i < longSlice.length; i++) {
+        const d = longSlice[i];
+        const prevD = i > 0 ? longSlice[i-1] : null;
+        const price = priceLongSlice[i];
+        const prevPrice = i > 0 ? priceLongSlice[i-1] : null;
+        if (!isLossForDir(d, dir, prevD, price, prevPrice, hottestDigit)) ltCount++;
+      }
+      ltPctMap[dir] = ((ltCount / longSlice.length) * 100).toFixed(1);
+      
+      let rL = 0;
+      for (let i = recentWindow.length - 1; i >= 0; i--) {
+        const d = recentWindow[i];
+        const prevD = i > 0 ? recentWindow[i-1] : null;
+        const price = priceRecentWindow[i];
+        const prevPrice = i > 0 ? priceRecentWindow[i-1] : null;
+        if (isLossForDir(d, dir, prevD, price, prevPrice, hottestDigit) && rL === (recentWindow.length - 1 - i)) rL++;
+      }
+      recentLossesMap[dir] = rL;
+      
+      tailLossMap[dir] = tailLossStreakFromEnd(histBuf, priceHistBuf, dir, hottestDigit);
+      avgMaxLossMap[dir] = computeAvgMaxLossStreak(histBuf, priceHistBuf, dir, hottestDigit);
+    }
+
     return {
       overCount, underCount, d5Count,
       overPct: overPct.toFixed(1),
@@ -210,6 +388,15 @@ class MarketScanner {
       recentUnderLosses,
       recentEvenLosses,
       recentOddLosses,
+      avgMaxOverLoss,
+      avgMaxUnderLoss,
+      avgMaxEvenLoss,
+      avgMaxOddLoss,
+      tailOverLoss,
+      tailUnderLoss,
+      tailEvenLoss,
+      tailOddLoss,
+      pct, ltPct: ltPctMap, recentLossesMap, tailLossMap, avgMaxLossMap,
     };
   }
 
@@ -226,6 +413,18 @@ class MarketScanner {
       freq: Array(10).fill(0),
       tickCount: 0,
       lastDigit: null,
+      avgMaxOverLoss: 3,
+      avgMaxUnderLoss: 3,
+      avgMaxEvenLoss: 3,
+      avgMaxOddLoss: 3,
+      tailOverLoss: 0,
+      tailUnderLoss: 0,
+      tailEvenLoss: 0,
+      tailOddLoss: 0,
+      counterReady: false,
+      counterOverAligned: false,
+      counterUnderAligned: false,
+      pct: {}, ltPct: {}, recentLossesMap: {}, tailLossMap: {}, avgMaxLossMap: {},
     };
   }
 
@@ -233,6 +432,7 @@ class MarketScanner {
   reset() {
     MARKETS.forEach(sym => {
       this.buffers[sym] = [];
+      this.priceBuffers[sym] = [];
       this.scores[sym] = this._emptyScore();
     });
   }

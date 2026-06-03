@@ -6,16 +6,20 @@ import StatCard from '../components/StatCard';
 import TickFeed from '../components/TickFeed';
 import BotControl from '../components/BotControl';
 import TradeHistory from '../components/TradeHistory';
+import StrategyLeaderboard from '../components/StrategyLeaderboard';
 import useConnectionStore from '../store/useConnectionStore';
 import useTradeStore from '../store/useTradeStore';
 import enhancedTradeEngine from '../lib/enhancedTradeEngine';
 import { MARKETS, MARKET_LABELS } from '../lib/marketScanner';
+import { computePerformanceBreakdown, BINARY_BREAKEVEN_WR } from '../lib/tradeAnalytics';
+import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
   const balance = useConnectionStore(s => s.balance);
   const currency = useConnectionStore(s => s.currency);
   const stats = useTradeStore(s => s.sessionStats);
   const botRunning = useTradeStore(s => s.botRunning);
+  const botStatus = useTradeStore(s => s.botStatus);
   const config = useConfigStore();
   const [tick, setTick] = useState(0);
 
@@ -25,9 +29,18 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, []);
 
+  const history = useTradeStore(s => s.history);
+  const stopReason = useTradeStore(s => s.stopReason);
+
   const winRate = stats.trades > 0
     ? ((stats.wins / stats.trades) * 100).toFixed(1)
     : '0.0';
+
+  const balanceNum = Number(balance) || 0;
+  const pnlNum = Number(stats.pnl) || 0;
+
+  const perf = computePerformanceBreakdown(history);
+  const showPerfWarn = stats.trades >= 10 && perf.belowBreakeven;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1600, margin: '0 auto', height: '100%' }}>
@@ -38,8 +51,11 @@ export default function Dashboard() {
             fontSize: 22, fontWeight: 700, color: 'var(--text-primary)',
             margin: 0,
           }}>
-            Dashboard
+            Synthetic Markets
           </h1>
+          <div style={{ color: 'var(--crimson)', fontSize: 13, marginTop: 4, fontWeight: 600 }}>
+            Do not overtrade you might loose everything
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
             {/* Auto Switch Toggle */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8, paddingRight: 8, borderRight: '1px solid var(--border)' }}>
@@ -68,8 +84,15 @@ export default function Dashboard() {
                 <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 12 }}>$</span>
                 <input
                   type="number"
-                  value={config.baseStake || ''}
-                  onChange={(e) => config.updateConfig({ baseStake: parseFloat(e.target.value) || 0.35 })}
+                  value={config.baseStake ?? 0.35}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    config.updateConfig({ baseStake: Number.isFinite(v) && v >= 0.35 ? v : 0.35 });
+                  }}
+                  onBlur={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (!Number.isFinite(v) || v < 0.35) config.updateConfig({ baseStake: 0.35 });
+                  }}
                   step={0.01}
                   min={0.35}
                   className="font-data"
@@ -77,11 +100,12 @@ export default function Dashboard() {
                     background: 'var(--bg-primary)',
                     border: '1px solid var(--border)',
                     borderRadius: 4,
-                    padding: '2px 8px 2px 20px',
+                    padding: '4px 10px 4px 22px',
                     color: 'var(--text-primary)',
-                    fontSize: 12,
+                    fontSize: 13,
                     outline: 'none',
-                    width: 60
+                    width: 88,
+                    minWidth: 88,
                   }}
                 />
               </div>
@@ -191,10 +215,47 @@ export default function Dashboard() {
             >
               OU WINNING
             </button>
+            <button
+              onClick={() => config.updateConfig({ strategy: 'OMNISNIPER' })}
+              style={{
+                background: config.strategy === 'OMNISNIPER' ? 'var(--amber)' : 'rgba(255,255,255,0.05)',
+                border: config.strategy === 'OMNISNIPER' ? 'none' : '1px solid var(--border)',
+                color: config.strategy === 'OMNISNIPER' ? '#000' : 'var(--text-muted)',
+                fontSize: 11, fontWeight: 700, padding: '4px 10px',
+                borderRadius: 4, cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              OMNISNIPER
+            </button>
           </div>
         </div>
         {botRunning && <div className="live-dot" />}
       </div>
+      {(showPerfWarn || stopReason || config.conservativeMode || config.minStakeOnly) && (
+        <div className="glass" style={{
+          padding: '10px 14px', fontSize: 12,
+          borderLeft: showPerfWarn ? '3px solid var(--crimson)' : '3px solid var(--cyan)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+        }}>
+          <div style={{ color: 'var(--text-secondary)' }}>
+            {showPerfWarn && (
+              <span style={{ color: 'var(--crimson)', fontWeight: 600 }}>
+                WR {winRate}% below break-even ({BINARY_BREAKEVEN_WR}%) · consider conservative / base-stake mode ·{' '}
+              </span>
+            )}
+            {config.conservativeMode && <span>Conservative · </span>}
+            {config.minStakeOnly && <span>Base stake only · </span>}
+            {perf.rolling10 != null && <span>WR10 {Number(perf.rolling10).toFixed(0)}% · </span>}
+            {perf.rolling50 != null && <span>WR50 {Number(perf.rolling50).toFixed(0)}%</span>}
+            {stopReason && (
+              <div style={{ color: 'var(--crimson)', marginTop: 4 }}>Stopped: {stopReason}</div>
+            )}
+          </div>
+          <Link to="/history" style={{ color: 'var(--cyan)', fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>
+            Analytics →
+          </Link>
+        </div>
+      )}
 
       {/* Grid Layout: Adjusted for wider history table */}
       <div className="flex flex-col xl:flex-row gap-4 flex-1 min-h-0">
@@ -202,12 +263,14 @@ export default function Dashboard() {
         {/* Left Column (Main Controls & Stats - Reduced width to 5/12) */}
         <div className="flex flex-col gap-4 xl:w-5/12 flex-shrink-0">
           
+          <StrategyLeaderboard />
+
           {/* Stat Cards */}
           <div className="grid grid-cols-4 gap-1 sm:gap-2">
             <StatCard
               icon={Wallet}
               label="Balance"
-              value={`$${balance.toFixed(2)}`}
+              value={`$${balanceNum.toFixed(2)}`}
               sub={currency}
               color="var(--amber)"
               delay={0}
@@ -215,9 +278,9 @@ export default function Dashboard() {
             <StatCard
               icon={TrendingUp}
               label="Session P&L"
-              value={`${stats.pnl >= 0 ? '+' : ''}$${stats.pnl.toFixed(2)}`}
+              value={`${pnlNum >= 0 ? '+' : ''}$${pnlNum.toFixed(2)}`}
               sub={`${stats.trades} trades`}
-              color={stats.pnl >= 0 ? 'var(--success)' : 'var(--crimson)'}
+              color={pnlNum >= 0 ? 'var(--success)' : 'var(--crimson)'}
               delay={0.05}
             />
             <StatCard
@@ -232,14 +295,13 @@ export default function Dashboard() {
               icon={Activity}
               label="Active"
               value={botRunning ? 'LIVE' : 'OFF'}
-              sub={botRunning ? 'Executing' : 'Idle'}
+              sub={botRunning ? (botStatus || 'Scanning…') : 'Idle'}
               color={botRunning ? 'var(--cyan)' : 'var(--text-muted)'}
               delay={0.15}
             />
           </div>
 
-          {/* Tick Feed */}
-          <TickFeed />
+          {/* Tick Feed Removed for Synthetics */}
 
           {/* Bot Control */}
           <BotControl />

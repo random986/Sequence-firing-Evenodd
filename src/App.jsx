@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
-import Scanner from './pages/Scanner';
+import RealMarketsTab from './pages/RealMarketsTab';
 import History from './pages/History';
 import Copytrade from './pages/Copytrade';
 import Settings from './pages/Settings';
@@ -12,8 +12,13 @@ import Preloader from './components/Preloader';
 import FloatingDisclaimer from './components/FloatingDisclaimer';
 import OnboardingGuide from './components/OnboardingGuide';
 import { Toaster } from 'react-hot-toast';
+import { installTabKeepalive, registerTabKeepaliveListener } from './lib/tabKeepalive';
+import tradeEngine from './lib/enhancedTradeEngine';
+import { engine as realMarketEngine } from './lib/realMarketEngine';
+import useTradeStore from './store/useTradeStore';
+import { useRealMarketStore } from './stores/useRealMarketStore';
 
-// Helper to fetch account list using the new REST API
+// Helper to fetch account list using the new Options REST API
 const getAccountList = async (token) => {
   const response = await fetch('https://api.derivws.com/trading/v1/options/accounts', {
     method: 'GET',
@@ -25,11 +30,12 @@ const getAccountList = async (token) => {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(`REST Account Fetch Error: ${errorData?.error?.message || errorData?.message || response.status}`);
+    throw new Error(errorData?.errors?.[0]?.message || errorData?.message || `HTTP ${response.status}`);
   }
 
   const result = await response.json();
-  return result.accounts || result.data || [];
+  // Official API returns { data: [...] }
+  return result.data || [];
 };
 
 export default function App() {
@@ -45,6 +51,46 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [theme]);
+
+  useEffect(() => {
+    installTabKeepalive();
+    const offBot = registerTabKeepaliveListener(() => {
+      if (useTradeStore.getState().botRunning) {
+        tradeEngine.wakeFromBackgroundTab();
+      }
+    });
+    const offReal = registerTabKeepaliveListener(() => {
+      if (useRealMarketStore.getState().autoTrade) {
+        realMarketEngine.wakeFromBackgroundTab();
+      }
+    });
+    return () => {
+      offBot();
+      offReal();
+    };
+  }, []);
+
+  useEffect(() => {
+    tradeEngine.onLiveAnalysisUpdate = (payload) => {
+      useTradeStore.getState().setLiveAnalysisBoard(payload);
+    };
+    const syncPreview = () => {
+      const strategy = useConfigStore.getState().strategy;
+      if (useTradeStore.getState().botRunning) return;
+      if (strategy === 'BOTH' || strategy === 'BOTH5') {
+        tradeEngine.startSyntheticPreview(strategy);
+      } else {
+        tradeEngine.stopSyntheticPreview();
+      }
+    };
+    syncPreview();
+    const unsub = useConfigStore.subscribe(syncPreview);
+    return () => {
+      unsub();
+      tradeEngine.stopSyntheticPreview();
+      if (tradeEngine.onLiveAnalysisUpdate) tradeEngine.onLiveAnalysisUpdate = null;
+    };
+  }, []);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -131,7 +177,7 @@ export default function App() {
             currency: acc.currency || 'USD',
             name: acc.account_type === 'demo' ? 'Demo Account' : 'Real Account',
             is_virtual: acc.account_type === 'demo',
-            balance: acc.balance || null
+            balance: typeof acc.balance === 'number' ? acc.balance : (parseFloat(acc.balance) || 0)
           }));
           useAccountStore.getState().addOAuthAccounts(mappedAccounts);
           setIsAuthorizing(false);
@@ -154,15 +200,17 @@ export default function App() {
       <Preloader onAccept={() => setAppReady(true)} />
       
       {appReady && (
-        <>
+        <BrowserRouter>
           <FloatingDisclaimer />
           <OnboardingGuide />
-          <Toaster position="top-center" toastOptions={{
+          <Toaster position="top-center" containerStyle={{ zIndex: 999999 }} toastOptions={{
             style: {
-              background: 'var(--bg-card)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border)',
+              background: '#1a1b20', // Solid background instead of transparent
+              color: '#ffffff',
+              border: 'none', // No borders
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
               maxWidth: '90vw',
+              zIndex: 999999
             }
           }} />
       <style>{`
@@ -271,11 +319,10 @@ export default function App() {
         </div>
       )}
 
-      <BrowserRouter>
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/scanner" element={<Scanner />} />
+            <Route path="/real-markets" element={<RealMarketsTab />} />
             <Route path="/history" element={<History />} />
             <Route path="/copytrade" element={<Copytrade />} />
             <Route path="/settings" element={<Settings />} />
@@ -283,7 +330,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
-        </>
       )}
     </>
   );

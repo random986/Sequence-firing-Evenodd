@@ -1,12 +1,37 @@
 /* ═══ Trade Store ═══ */
 import { create } from 'zustand';
+import useConfigStore from './useConfigStore';
+import { num } from '../lib/format';
+
+const ANALYTICS_LOG_KEY = 'derivprinter_analytics_log';
+const ANALYTICS_LOG_CAP = 2000;
+
+function loadPersistedLog() {
+  try {
+    const raw = localStorage.getItem(ANALYTICS_LOG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+function persistTradeRow(trade) {
+  if (trade?.pending) return;
+  if (useConfigStore.getState().persistTradeLog === false) return;
+  try {
+    const log = loadPersistedLog();
+    log.unshift({ ...trade, persistedAt: Date.now() });
+    localStorage.setItem(ANALYTICS_LOG_KEY, JSON.stringify(log.slice(0, ANALYTICS_LOG_CAP)));
+  } catch {}
+}
 
 const useTradeStore = create((set, get) => ({
   history: [],
   activeTrades: 0,
   botRunning: false,
+  botStatus: '',
   stopReason: null,
   sessionStats: { wins: 0, losses: 0, pnl: 0, trades: 0 },
+  liveAnalysisBoard: null,
 
   addOrUpdateTrade: (trade) => set((s) => {
     let stats = { ...s.sessionStats };
@@ -21,9 +46,10 @@ const useTradeStore = create((set, get) => ({
       // If it transitioned from pending to settled, update stats
       if (existing.pending && !trade.pending) {
         stats.trades += 1;
-        stats.pnl += trade.profit;
+        stats.pnl += num(trade.profit);
         if (trade.won) stats.wins += 1;
         else stats.losses += 1;
+        persistTradeRow(newHistory[existingIndex]);
       }
     } else {
       // Add new trade
@@ -31,9 +57,10 @@ const useTradeStore = create((set, get) => ({
       // If it's fully settled immediately (rare but possible), update stats
       if (!trade.pending) {
         stats.trades += 1;
-        stats.pnl += trade.profit;
+        stats.pnl += num(trade.profit);
         if (trade.won) stats.wins += 1;
         else stats.losses += 1;
+        persistTradeRow(trade);
       }
     }
     
@@ -43,13 +70,25 @@ const useTradeStore = create((set, get) => ({
   setActiveTrades: (n) => set({ activeTrades: n }),
   setBotRunning: (running) => set({ botRunning: running, stopReason: running ? null : get().stopReason }),
   setStopReason: (reason) => set({ stopReason: reason, botRunning: false }),
+  setBotStatus: (botStatus) => set({ botStatus }),
+  setLiveAnalysisBoard: (liveAnalysisBoard) => set({ liveAnalysisBoard }),
 
   resetSession: () => set({
     history: [],
     activeTrades: 0,
     sessionStats: { wins: 0, losses: 0, pnl: 0, trades: 0 },
     stopReason: null,
+    botStatus: '',
+    liveAnalysisBoard: null,
   }),
+
+  getPersistedLog: () => loadPersistedLog(),
+
+  clearPersistedLog: () => {
+    try {
+      localStorage.removeItem(ANALYTICS_LOG_KEY);
+    } catch {}
+  },
 }));
 
 export default useTradeStore;

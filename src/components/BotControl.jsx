@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Square, Zap, Link2 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -6,6 +6,8 @@ import useTradeStore from '../store/useTradeStore';
 import useConnectionStore from '../store/useConnectionStore';
 import useConfigStore from '../store/useConfigStore';
 import tradeEngine from '../lib/enhancedTradeEngine';
+import { resetGlobalRiskMatrix } from '../lib/apexMatrixEngine.js';
+import { getConservativeEngineOverrides } from '../lib/tradeAnalytics.js';
 import derivWS from '../lib/derivWS';
 import { MARKET_LABELS } from '../lib/marketScanner';
 import useAccountStore from '../store/useAccountStore';
@@ -13,6 +15,7 @@ import useAccountStore from '../store/useAccountStore';
 export default function BotControl() {
   const navigate = useNavigate();
   const botRunning = useTradeStore(s => s.botRunning);
+  const botStatus = useTradeStore(s => s.botStatus);
   const stopReason = useTradeStore(s => s.stopReason);
   const status = useConnectionStore(s => s.status);
   const activeMarket = useConnectionStore(s => s.activeMarket);
@@ -24,8 +27,31 @@ export default function BotControl() {
   const setActiveMarket = useConnectionStore(s => s.setActiveMarket);
   const addOrUpdateTrade = useTradeStore(s => s.addOrUpdateTrade);
   const resetSession = useTradeStore(s => s.resetSession);
+  const setBotStatus = useTradeStore(s => s.setBotStatus);
+  const setLiveAnalysisBoard = useTradeStore(s => s.setLiveAnalysisBoard);
+
+  useEffect(() => {
+    tradeEngine.onLiveAnalysisUpdate = (payload) => setLiveAnalysisBoard(payload);
+    return () => {
+      if (tradeEngine.onLiveAnalysisUpdate) tradeEngine.onLiveAnalysisUpdate = null;
+    };
+  }, [setLiveAnalysisBoard]);
+
+  useEffect(() => {
+    if (botRunning) {
+      tradeEngine.onTradeUpdate = (trade) => addOrUpdateTrade(trade);
+      tradeEngine.onBotStop = (reason) => { 
+        setStopReason(reason); 
+        setBotStatus(''); 
+        setBotRunning(false);
+      };
+      tradeEngine.onMarketSwitch = (market) => setActiveMarket(market);
+      tradeEngine.onStatusChange = (statusStr) => setBotStatus(statusStr);
+    }
+  }, [botRunning, addOrUpdateTrade, setStopReason, setBotStatus, setActiveMarket, setBotRunning]);
 
   const handleToggle = useCallback(() => {
+    resetGlobalRiskMatrix();
     if (botRunning) {
       tradeEngine.stop('User stopped');
       setBotRunning(false);
@@ -34,28 +60,73 @@ export default function BotControl() {
       resetSession();
 
       tradeEngine.onTradeUpdate = (trade) => addOrUpdateTrade(trade);
-      tradeEngine.onBotStop = (reason) => { setStopReason(reason); };
+      tradeEngine.onBotStop = (reason) => { setStopReason(reason); setBotStatus(''); };
       tradeEngine.onMarketSwitch = (market) => setActiveMarket(market);
+      tradeEngine.onStatusChange = (botStatus) => setBotStatus(botStatus);
+
+      const conservative = getConservativeEngineOverrides(config);
+      const baseStake = config.minStakeOnly
+        ? Math.max(0.35, Number(config.baseStake) || 0.35)
+        : config.baseStake;
 
       tradeEngine.start({
         strategy: config.strategy,
-        baseStake: config.baseStake,
+        baseStake,
         maxSteps: config.maxSteps,
+        maxMartingaleStep: config.maxMartingaleStep ?? config.maxSteps ?? 0,
+        recoveryPayoutRate: config.recoveryPayoutRate ?? 0.92,
         martMultiplier: config.martMultiplier,
+        martingaleHoldAfterStep: config.martingaleHoldAfterStep ?? 0,
         recoveryEnabled: config.recoveryEnabled,
+        resetMartingaleOnWin: config.resetMartingaleOnWin !== false,
         antiMartEnabled: config.antiMartEnabled,
         antiMartMultiplier: config.antiMartMultiplier,
         switchAfterLosses: config.switchAfterLosses,
         stopLoss: config.stopLoss || 0,
         takeProfit: config.takeProfit || 0,
         cooldownMs: config.cooldownMs,
+        entryConfirmEnabled: config.entryConfirmEnabled !== false,
+        entryConfirmRandom: config.entryConfirmRandom !== false,
+        entryConfirmMinSec: config.entryConfirmMinSec ?? 20,
+        entryConfirmMaxSec: config.entryConfirmMaxSec ?? 25,
+        entryConfirmMs: config.entryConfirmMs ?? 0,
         minConfidence: config.minConfidence,
         virtualLossesToWait: config.virtualLossesToWait,
         autoSwitchMarkets: config.autoSwitchMarkets,
+        maxStakeCap: config.maxStakeCap,
+        maxStakeMultiplier: config.maxStakeMultiplier,
+        maxTradesPerMinute: config.maxTradesPerMinute,
+        recoveryLossTarget: config.recoveryLossTarget,
+        maxLossStreak: config.maxLossStreak ?? 0,
+        maxLossStreakStopEnabled: config.maxLossStreakStopEnabled === true,
+        lossStreakPauseMs: config.lossStreakPauseMs ?? 12000,
+        entryGateMinWin: config.entryGateMinWin ?? 49,
+        entryGateTightenPerLoss: config.entryGateTightenPerLoss ?? 2,
+        entryGateMinConv: config.entryGateMinConv ?? 45,
+        entryGateMinEdge: config.entryGateMinEdge ?? 102,
+        entryGateMinOppEnd: config.entryGateMinOppEnd ?? 4,
+        entryGateMinOppStreak: config.entryGateMinOppStreak ?? 4,
+        freezeMartingaleAfterLosses: config.freezeMartingaleAfterLosses,
+        maxMartingaleStepWhenLosing: config.maxMartingaleStepWhenLosing,
+        rollingWinRateKillEnabled: config.rollingWinRateKillEnabled !== false,
+        rollingWinRateFloor: config.rollingWinRateFloor ?? 48,
+        rollingWinRateWindow: config.rollingWinRateWindow ?? 50,
+        rollingWinRateMinTrades: config.rollingWinRateMinTrades ?? 20,
+        sessionDrawdownStopPct: config.sessionDrawdownStopPct ?? 28,
+        cascadePauseAt: config.cascadePauseAt ?? 4,
+        cascadeFreezeAt: config.cascadeFreezeAt ?? 3,
+        cascadeStopAt: config.cascadeStopAt ?? 6,
+        cascadePauseMs: config.cascadePauseMs ?? 8000,
+        conservativeMode: config.conservativeMode === true,
+        minStakeOnly: config.minStakeOnly === true,
+        requireExhaustionGate: config.requireExhaustionGate !== false,
+        invertTradeDirection: config.invertTradeDirection === true,
+        adaptiveInvertDirection: config.adaptiveInvertDirection !== false,
+        ...conservative,
       });
       setBotRunning(true);
     }
-  }, [botRunning, status, config, setBotRunning, setStopReason, setActiveMarket, addOrUpdateTrade, resetSession]);
+  }, [botRunning, status, config, setBotRunning, setStopReason, setActiveMarket, addOrUpdateTrade, resetSession, setBotStatus]);
 
   const canStart = status === 'authorized' && !botRunning;
 
@@ -102,11 +173,16 @@ export default function BotControl() {
         {buttonJSX}
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            {botRunning && activeMarket && (
+            {botRunning && (
               <>
-                <Zap size={12} color="var(--cyan)" />
-                <span className="font-data" style={{ color: 'var(--cyan)', fontWeight: 600 }}>{MARKET_LABELS[activeMarket] || activeMarket}</span>
-                <span>• {config.strategy === 'BOTH5' ? 'Over/Under 5' : 'Even/Odd'}</span>
+                {activeMarket && (
+                  <>
+                    <Zap size={12} color="var(--cyan)" />
+                    <span className="font-data" style={{ color: 'var(--cyan)', fontWeight: 600 }}>{MARKET_LABELS[activeMarket] || activeMarket}</span>
+                    <span>• </span>
+                  </>
+                )}
+                <span>{botStatus || (config.strategy === 'BOTH5' ? 'Scanning Over/Under…' : 'Scanning…')}</span>
               </>
             )}
             {!botRunning && stopReason && (

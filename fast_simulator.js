@@ -85,7 +85,13 @@ derivWS.send = async (payload) => {
   if (payload.buy) {
     const cid = 'mock_contract_' + mockReqId;
     const stake = payload.price;
-    const direction = payload.parameters.contract_type === 'DIGITOVER' ? 'OVER5' : 'UNDER5';
+    const contractType = payload.parameters.contract_type;
+    let direction = 'UNDER5';
+    if (contractType === 'DIGITOVER') direction = 'OVER5';
+    else if (contractType === 'DIGITUNDER') direction = 'UNDER5';
+    else if (contractType === 'DIGITEVEN') direction = 'EVEN';
+    else if (contractType === 'DIGITODD') direction = 'ODD';
+
     const symbol = payload.parameters.symbol;
 
     // Resolve trade outcome on the NEXT tick for this market
@@ -95,8 +101,18 @@ derivWS.send = async (payload) => {
     // Ingest the exit tick
     scanner.addTick(symbol, price);
 
-    const won = direction === 'OVER5' ? nextDigit > 5 : nextDigit < 5;
-    const profit = won ? (direction === 'OVER5' ? stake * 1.3714 : stake * 0.8857) : -stake;
+    let won = false;
+    if (direction === 'OVER5') won = nextDigit > 5;
+    else if (direction === 'UNDER5') won = nextDigit < 5;
+    else if (direction === 'EVEN') won = nextDigit % 2 === 0;
+    else if (direction === 'ODD') won = nextDigit % 2 !== 0;
+
+    let profitRate = 0.8857;
+    if (direction === 'OVER5') profitRate = 1.3714;
+    else if (direction === 'UNDER5') profitRate = 0.8857;
+    else if (direction === 'EVEN' || direction === 'ODD') profitRate = 0.96;
+
+    const profit = won ? stake * profitRate : -stake;
 
     const msg = {
       proposal_open_contract: {
@@ -130,25 +146,38 @@ derivWS.sendRaw = () => {};
 let simulatedTime = Date.now();
 Date.now = () => simulatedTime;
 
-// Intercept engine's scheduleNext to run synchronously and feed new ticks
+// Remove the _scheduleNext override that was causing deadlocks
+// and replace it with a continuous tick feed loop that mimics real market data
+
 enhancedTradeEngine._scheduleNext = (delayMs) => {
-  simulatedTime += delayMs; // Advance virtual clock instantly
-  
-  setImmediate(() => {
-    if (enhancedTradeEngine.running) {
-      // Feed a tick into a random market to trigger next evaluation
-      const sym = MARKETS[Math.floor(Math.random() * MARKETS.length)];
-      const digit = getNextDigit();
-      scanner.addTick(sym, generatePriceWithDigit(digit));
-      
-      enhancedTradeEngine._executeCycle();
-    }
-  });
+  simulatedTime += delayMs; 
 };
+
+async function runSimulationLoop() {
+  while (tradeCount < 305 && enhancedTradeEngine.running) {
+    // Advance virtual time slightly for each tick
+    simulatedTime += 200;
+    
+    // Feed a tick into a random market
+    const sym = MARKETS[Math.floor(Math.random() * MARKETS.length)];
+    const digit = getNextDigit();
+    scanner.addTick(sym, generatePriceWithDigit(digit));
+    
+    try {
+      enhancedTradeEngine._executeCycle();
+    } catch (e) {
+      console.error("Execute Cycle Error:", e);
+    }
+    
+    // Yield to microtask queue so promises can resolve (e.g. mock trades)
+    await new Promise(resolve => setImmediate(resolve));
+  }
+}
+
 
 // Write walkthrough markdown report
 function createWalkthrough(trades, winRate, avgWin, lossRate, avgLoss, calculatedExpectancy) {
-  const artifactPath = 'C:\\Users\\User\\.gemini\\antigravity\\brain\\8dc75495-f862-4600-bb03-032f9e1d66ff\\walkthrough.md';
+  const artifactPath = 'C:\\\\Users\\\\User\\\\.gemini\\\\antigravity\\\\brain\\\\e9117a2a-889b-45b3-8c16-fc24099269cd\\\\walkthrough.md';
   
   const wins = trades.filter(t => t.won).length;
   const losses = trades.filter(t => !t.won).length;
@@ -256,3 +285,6 @@ enhancedTradeEngine.start({
   minConfidence: 65,
   cooldownMs: 0, // No cooldown during simulation
 });
+
+// Start the continuous tick feed
+runSimulationLoop();

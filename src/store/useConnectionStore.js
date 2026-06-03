@@ -1,5 +1,6 @@
 /* ═══ Connection Store ═══ */
 import { create } from 'zustand';
+import { num } from '../lib/format.js';
 
 const useConnectionStore = create((set) => ({
   status: 'disconnected',
@@ -11,10 +12,10 @@ const useConnectionStore = create((set) => ({
   setStatus: (status) => set({ status }),
   setAccount: (account) => set({
     account,
-    balance: account?.balance || 0,
+    balance: num(account?.balance),
     currency: account?.currency || 'USD',
   }),
-  setBalance: (balance) => set({ balance }),
+  setBalance: (balance) => set({ balance: num(balance) }),
   setActiveMarket: (market) => set({ activeMarket: market }),
 }));
 

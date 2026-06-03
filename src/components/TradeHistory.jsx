@@ -1,6 +1,7 @@
 /* ═══ TradeHistory — Expanded History Table ═══ */
 import { useEffect, useState } from 'react';
 import useTradeStore from '../store/useTradeStore';
+import { useRealMarketStore } from '../stores/useRealMarketStore';
 import { MARKET_LABELS } from '../lib/marketScanner';
 import { Trash2, Timer } from 'lucide-react';
 import enhancedTradeEngine from '../lib/enhancedTradeEngine';
@@ -14,10 +15,32 @@ function formatTimeElapsed(ms) {
   return `${Math.floor(minutes / 60)}h ago`;
 }
 
+const LEG_DISPLAY_ORDER = { EVEN: 0, ODD: 1, OVER5: 0, UNDER5: 1 };
+
+function fmtMoney(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+}
+
+function sortTradesForDisplay(rows) {
+  return [...rows].sort((a, b) => {
+    if (b.time !== a.time) return b.time - a.time;
+    const ma = MARKET_LABELS[a.market] || a.market;
+    const mb = MARKET_LABELS[b.market] || b.market;
+    if (ma !== mb) return String(ma).localeCompare(String(mb));
+    const ao = a.legOrder ?? LEG_DISPLAY_ORDER[a.direction] ?? 5;
+    const bo = b.legOrder ?? LEG_DISPLAY_ORDER[b.direction] ?? 5;
+    return ao - bo;
+  });
+}
+
 export default function TradeHistory({ limit = 10, fullHeight = false }) {
-  const history = useTradeStore(s => s.history);
+  const history = useTradeStore(s => s.history) || [];
   const stats = useTradeStore(s => s.sessionStats);
-  const trades = limit ? history.slice(0, limit) : history;
+  
+  const trades = limit
+    ? sortTradesForDisplay(history).slice(0, limit)
+    : sortTradesForDisplay(history);
   const [now, setNow] = useState(Date.now());
 
   // Update time elapsed every second
@@ -30,8 +53,10 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
   let maxStake = 0;
   let maxCashout = 0;
   history.forEach(t => {
-    if (t.stake > maxStake) maxStake = t.stake;
-    const payout = t.won ? (t.stake + t.profit) : 0;
+    const stake = Number(t.stake) || 0;
+    const profit = Number(t.profit) || 0;
+    if (stake > maxStake) maxStake = stake;
+    const payout = t.won ? (stake + profit) : 0;
     if (payout > maxCashout) maxCashout = payout;
   });
 
@@ -55,7 +80,7 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
           <div className="flex flex-col items-end">
             <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Session P&L</span>
             <span className="font-data" style={{ fontSize: 14, color: stats.pnl >= 0 ? 'var(--success)' : 'var(--crimson)', fontWeight: 700 }}>
-              {stats.pnl >= 0 ? '+' : ''}${stats.pnl.toFixed(2)}
+              {Number(stats.pnl) >= 0 ? '+' : ''}${fmtMoney(stats.pnl)}
             </span>
           </div>
           <div className="flex flex-col items-end">
@@ -82,7 +107,7 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
             </div>
           )}
           <button 
-            onClick={() => useTradeStore.getState().resetSession()}
+            onClick={() => { useTradeStore.getState().resetSession(); useRealMarketStore.getState().resetSession(); }}
             style={{
               background: 'rgba(255, 68, 79, 0.1)', border: '1px solid var(--crimson)',
               color: 'var(--crimson)', padding: '6px', borderRadius: 6, cursor: 'pointer',
@@ -104,7 +129,7 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 10 }}>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Time', 'Market', 'Type', 'Stake', 'P&L'].map((h, i) => (
+                {['Time', 'Market', 'Type', 'Stake', 'Score', 'P&L'].map((h, i) => (
                   <th key={h} style={{
                     padding: '12px 6px', textAlign: i >= 3 ? 'right' : 'left',
                     color: 'var(--text-muted)', fontWeight: 600, fontSize: 11,
@@ -136,13 +161,18 @@ export default function TradeHistory({ limit = 10, fullHeight = false }) {
                     </span>
                   </td>
                   <td className="font-data text-right" style={{ padding: '12px 6px', color: 'var(--text-primary)' }}>
-                    ${t.stake.toFixed(2)}
+                    ${fmtMoney(t.stake)}
+                  </td>
+                  <td className="font-data text-right" style={{ padding: '12px 6px', color: 'var(--text-muted)', fontSize: 11 }}>
+                    {t.score != null || t.sniperScore != null
+                      ? (t.sniperScore ?? t.score)
+                      : '—'}
                   </td>
                   <td className="font-data text-right" style={{
                     padding: '12px 6px', fontSize: 13, fontWeight: 700,
                     color: t.pending ? 'var(--text-muted)' : (t.won ? 'var(--success)' : 'var(--crimson)'),
                   }}>
-                    {t.pending ? '...' : `${t.won ? '+' : ''}${t.profit.toFixed(2)}`}
+                    {t.pending ? '...' : `${t.won ? '+' : ''}${fmtMoney(t.profit)}`}
                   </td>
 
                 </tr>

@@ -101,7 +101,7 @@ class TradeEngine {
       // --- SINGLE DIRECTION STRATEGIES ---
       if (this.channels.SINGLE.active) return; // Wait for settlement
 
-      const minConf = this.config.minConfidence || 65;
+      const minConf = this.config.minConfidence || 60;
       const overPct = parseFloat(scores.overPct) || 0;
       const underPct = parseFloat(scores.underPct) || 0;
       const evenPct = parseFloat(scores.evenPct) || 0;
@@ -289,7 +289,7 @@ class TradeEngine {
       }
 
       // Check if we should switch markets using global losses
-      if (this.globalConsecutiveLosses >= (this.config.switchAfterLosses || 6)) {
+      if (this.config.switchAfterLosses > 0 && this.globalConsecutiveLosses >= this.config.switchAfterLosses) {
         console.log(`🔄 Switching market after ${this.globalConsecutiveLosses} global consecutive losses`);
         this._switchMarket();
       }

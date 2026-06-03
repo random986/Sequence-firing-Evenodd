@@ -31,15 +31,31 @@ derivWS.send = async (payload) => {
   if (payload.buy) {
     const cid = 'mock_contract_' + Math.random();
     const stake = payload.price;
-    const direction = payload.parameters.contract_type === 'DIGITOVER' ? 'OVER5' : 'UNDER5';
+    const contractType = payload.parameters.contract_type;
+    let direction = 'UNDER5';
+    if (contractType === 'DIGITOVER') direction = 'OVER5';
+    else if (contractType === 'DIGITUNDER') direction = 'UNDER5';
+    else if (contractType === 'DIGITEVEN') direction = 'EVEN';
+    else if (contractType === 'DIGITODD') direction = 'ODD';
+
     const symbol = payload.parameters.symbol;
 
     const nextDigit = 8; // force OVER so OVER5 wins, UNDER5 loses
     const price = generatePriceWithDigit(nextDigit);
     scanner.addTick(symbol, price);
 
-    const won = direction === 'OVER5' ? nextDigit > 5 : nextDigit < 5;
-    const profit = won ? (direction === 'OVER5' ? stake * 1.3714 : stake * 0.8857) : -stake;
+    let won = false;
+    if (direction === 'OVER5') won = nextDigit > 5;
+    else if (direction === 'UNDER5') won = nextDigit < 5;
+    else if (direction === 'EVEN') won = nextDigit % 2 === 0;
+    else if (direction === 'ODD') won = nextDigit % 2 !== 0;
+
+    let profitRate = 0.8857;
+    if (direction === 'OVER5') profitRate = 1.3714;
+    else if (direction === 'UNDER5') profitRate = 0.8857;
+    else if (direction === 'EVEN' || direction === 'ODD') profitRate = 0.96;
+
+    const profit = won ? stake * profitRate : -stake;
 
     const msg = {
       proposal_open_contract: {
